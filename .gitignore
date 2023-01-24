@@ -80,3 +80,6 @@ projects/opendr_ws_2/KITTI
 
 # packages
 src/opendr_toolkit*.egg-info/
+projects/python/perception/object_detection_2d/nanodet/predefined_examples/
+projects/python/perception/object_detection_2d/nanodet/onnx/
+projects/python/perception/object_detection_2d/nanodet/jit/
