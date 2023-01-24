@@ -22,12 +22,6 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backb
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.resnet import ResNet
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.shufflenetv2 import ShuffleNetV2
 
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_ghostnet import GhostNetSmall
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_mobilenetv2 import MobileNetV2Small
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_repvgg import RepVGGSmall
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_resnet import ResNetSmall
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_shufflenetv2 import ShuffleNetV2Small
-
 
 def build_backbone(cfg):
     backbone_cfg = copy.deepcopy(cfg)
@@ -46,15 +40,5 @@ def build_backbone(cfg):
         return CustomCspNet(**backbone_cfg)
     elif name == "RepVGG":
         return RepVGG(**backbone_cfg)
-    elif name == "GhostNetSmall":
-        return GhostNetSmall(**backbone_cfg)
-    elif name == "MobileNetV2Small":
-        return MobileNetV2Small(**backbone_cfg)
-    elif name == "RepVGGSmall":
-        return RepVGGSmall(**backbone_cfg)
-    elif name == "ResNetSmall":
-        return ResNetSmall(**backbone_cfg)
-    elif name == "ShuffleNetV2Small":
-        return ShuffleNetV2Small(**backbone_cfg)
     else:
         raise NotImplementedError
