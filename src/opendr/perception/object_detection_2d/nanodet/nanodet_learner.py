@@ -1,4 +1,4 @@
-# Copyright 2020-2023 OpenDR European Project
+# Copyright 2020-2022 OpenDR European Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -700,3 +700,96 @@ class NanodetLearner(Learner):
         bounding_boxes.data.sort(key=lambda v: v.confidence)
 
         return bounding_boxes
+
+    def benchmark(self, input, warmup=100, repetitions=1000, summary=False, summary_layers=False):
+        """
+        Performs benchmark
+        :param input: input can be an Image type image to perform inference
+        :type input: Image
+        :param threshold: confidence threshold
+        :type threshold: float, optional
+        :param verbose: if set to True, additional information is printed to STDOUT and logger txt output,
+        defaults to True
+        :type verbose: bool
+        :return: list of bounding boxes of last image of input or last frame of the video
+        :rtype: BoundingBoxList
+        """
+        import numpy as np
+
+        if not isinstance(input, Image):
+            input = Image(input)
+        _input = input.opencv()
+
+        preprocess_starter, preprocess_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        preprocess_timings = np.zeros((repetitions, 1))
+        for run in range(warmup):
+            (_input, _height, _width, _warp_matrix) = self.predictor.preprocessing(_input)
+        for run in range(repetitions):
+            preprocess_starter.record()
+            (_input, _height, _width, _warp_matrix) = self.predictor.preprocessing(_input)
+            preprocess_ender.record()
+            torch.cuda.synchronize()
+            preprocess_time = preprocess_starter.elapsed_time(preprocess_ender)
+            preprocess_timings[run] = preprocess_time
+        if self.ort_session:
+            ort_run_starter, ort_run_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
+                enable_timing=True)
+            ort_run_timings = np.zeros((repetitions, 1))
+            for run in range(warmup):
+                res = self.ort_session.run(['output'], {'data': _input.cpu().detach().numpy()})
+            for run in range(repetitions):
+                ort_run_starter.record()
+                res = self.ort_session.run(['output'], {'data': _input.cpu().detach().numpy()})
+                ort_run_ender.record()
+                torch.cuda.synchronize()
+                ort_run_time = ort_run_starter.elapsed_time(ort_run_ender)
+                ort_run_timings[run] = ort_run_time
+
+            res = self.ort_session.run(['output'], {'data': _input.cpu().detach().numpy()})
+            res = self.predictor.postprocessing(torch.from_numpy(res[0]), _input, _height, _width, _warp_matrix)
+        elif self.jit_model:
+            jit_run_starter, jit_run_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
+                enable_timing=True)
+            jit_run_timings = np.zeros((repetitions, 1))
+            for run in range(warmup):
+                res = self.jit_model(_input, _height, _width, _warp_matrix).cpu()
+            for run in range(repetitions):
+                jit_run_starter.record()
+                res = self.jit_model(_input, _height, _width, _warp_matrix).cpu()
+                jit_run_ender.record()
+                torch.cuda.synchronize()
+                jit_run_time = jit_run_starter.elapsed_time(jit_run_ender)
+                jit_run_timings[run] = jit_run_time
+
+            res = self.jit_model(_input, _height, _width, _warp_matrix).cpu()
+        else:
+            pyt_run_starter, pyt_run_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
+                enable_timing=True)
+            pyt_run_timings = np.zeros((repetitions, 1))
+            for run in range(warmup):
+                infer_out = self.predictor(_input, _height, _width, _warp_matrix, summary, summary_layers)
+            for run in range(repetitions):
+                pyt_run_starter.record()
+                infer_out = self.predictor(_input, _height, _width, _warp_matrix, summary, summary_layers)
+                pyt_run_ender.record()
+                torch.cuda.synchronize()
+                pyt_run_time = pyt_run_starter.elapsed_time(pyt_run_ender)
+                pyt_run_timings[run] = pyt_run_time
+
+            postprocessing_starter, postprocessing_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
+                enable_timing=True)
+            postprocessing_timings = np.zeros((repetitions, 1))
+            for run in range(warmup):
+                res = self.predictor.postprocessing(torch.from_numpy(infer_out[0]), _input, _height, _width, _warp_matrix)
+            for run in range(repetitions):
+                postprocessing_starter.record()
+                res = self.predictor.postprocessing(torch.from_numpy(infer_out[0]), _input, _height, _width, _warp_matrix)
+                postprocessing_ender.record()
+                torch.cuda.synchronize()
+                postprocessing_time = postprocessing_starter.elapsed_time(postprocessing_ender)
+                postprocessing_timings[run] = postprocessing_time
+
+            infer_out = self.predictor(_input, _height, _width, _warp_matrix, summary, summary_layers)
+            res = self.predictor.postprocessing(torch.from_numpy(infer_out[0]), _input, _height, _width, _warp_matrix)
+
+        return 0
