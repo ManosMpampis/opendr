@@ -1,0 +1,13 @@
+<annotation>
+	<folder>n02814533</folder>
+	<filename>n02814533_62180</filename>
+	<source>
+		<database>ILSVRC_2012</database>
+	</source>
+	<size>
+		<width>1280</width>
+		<height>960</height>
+		<depth>3</depth>
+	</size>
+
+</annotation>
