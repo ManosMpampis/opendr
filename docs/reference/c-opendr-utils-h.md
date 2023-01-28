@@ -3,66 +3,128 @@
 
 The *opendr_utils.h* header provides function definitions of OpenDR helpers (e.g., for creating OpenDR images).
 
-### Function *json_get_key_string()*
+### Function *jsonGetStringFromKey()*
 ```C
-const char* json_get_key_string(const char *json, const char *key, const int index);
+const char *jsonGetStringFromKey(const char *json, const char *key, const int index);
 ```
-The *json_get_key_string()* function allows for reading a json file and return the value of a key as string.
+The *jsonGetStringFromKey()* function reads a JSON string from the pointer (*json*) and returns the value of a key with pointer (*key*) as string.
 If the value is an array it will return only the (*index*) value of the array.
-A pointer (*json*) that have the json string and a pointer (*key*) with the wanted value is needed.
-If failes returns (*""*).
+If it fails it returns ("").
 
-### Function *json_get_key_float()*
+### Function *jsonGetFloatFromKey()*
 ```C
-float json_get_key_float(const char *json, const char *key, const int index);
+float jsonGetFloatFromKey(const char *json, const char *key, const int index);
 ```
-The *json_get_key_float()* function allows for reading a json file and return the value of a key as float.
+The *jsonGetFloatFromKey()* function reads a JSON string from the pointer (*json*) and returns the value of a key with pointer (*key*) as float.
 If the value is an array it will return only the (*index*) value of the array.
-A pointer (*json*) that have the json string and a pointer (*key*) with the wanted value is needed.
-If failes returns (*0.0f*).
+If it fails it returns (*0.0f*).
 
-### Function *json_get_key_from_inference_params()*
+### Function *jsonGetStringFromKeyInInferenceParams()*
 ```C
-float json_get_key_from_inference_params(const char *json, const char *key, const int index);
+const char *jsonGetStringFromKeyInInferenceParams(const char *json, const char *key, const int index);
 ```
-The *json_get_key_from_inference_params()* function allows for reading a json file and return the value of a key in inference_params section as float.
+The *jsonGetStringFromKeyInInferenceParams()* function reads a JSON string from the pointer (*json*) and returns the value of a key with pointer (*key*) in inference_params section as string.
 If the value is an array it will return only the (*index*) value of the array.
-A pointer (*json*) that have the json string and a pointer (*key*) with the wanted value is needed.
-If failes returns (*0.0f*).
+If it fails it returns ("").
 
-### Function *load_image()*
+### Function *jsonGetFloatFromKeyInInferenceParams()*
 ```C
-void load_image(const char *path, opendr_image_t *image);
+const char *jsonGetFloatFromKeyInInferenceParams(const char *json, const char *key, const int index);
 ```
-The *load_image()* function allows for reading an images from the local file system (*path*) into an OpenDR image data type.
-A pointer (*image*) to an OpenDR *opendr_image_t* should be provided.
-This function allocates memory during each function call, so be sure to use the *free_image()* function to release the allocated resources, when the corresponding image is no longer needed.
+The *jsonGetFloatFromKeyInInferenceParams()* function reads a JSON string from the pointer (*json*) and returns the value of a key with pointer (*key*) in inference_params section as float.
+If the value is an array it will return only the (*index*) value of the array.
+If it fails it returns (*0.0f*).
 
-### Function *free_image()*
-```C
-void free_image(opendr_image_t *image);
-```
-The *free_image()* function releases the memory allocated for an OpenDR image structure (*image*).
-A pointer (*image*) to an OpenDR *opendr_image_t* should be provided.
+---
 
-### Function *init_detections_vector()*
+### Function *loadImage()*
 ```C
-void init_detections_vector(opendr_detection_vector_target_t *detection_vector);
+void loadImage(const char *path, OpendrImageT *image);
 ```
-The *init_detections_vector()* function initialize the data of an OpenDR detection vector structure (*detection_vector*) with zero values.
-A pointer (*detection_vector*) to an OpenDR *detection_vector_target_t* should be provided.
+The *loadImage()* function loads an image from the local file system (*path*) into an OpenDR image data type.
+A pointer (*image*) to an OpenDR *OpendrImageT* should be provided.
+This function allocates memory during each function call, so be sure to use the *freeImage()* function to release the allocated resources, when the corresponding image is no longer needed.
 
-### Function *load_detections_vector()*
+### Function *freeImage()*
 ```C
-void load_detections_vector(opendr_detection_vector_target_t *detection_vector, opendr_detection_target_t *detection,
-                            int vector_size);
+void freeImage(OpendrImageT *image);
 ```
-The *load_detections_vector()* function allows for storing OpenDR detection target structures in to the memory allocated for multiple OpenDR detections structures (*detection*).
-A pointer (*detection_vector*) to an OpenDR *opendr_detection_vector_target_t* should be provided.
+The *freeImage()* function releases the memory allocated for an OpenDR image structure (*image*).
+A pointer (*image*) to an OpenDR *OpendrImageT* should be provided.
 
-### Function *free_detections_vector()*
+---
+
+### Function *initDetectionsVector()*
 ```C
-void free_detections_vector(opendr_detection_vector_target_t *detection_vector);
+void initDetectionsVector(OpendrDetectionVectorTargetT *vector);
 ```
-The *free_detections_vector()* function releases the memory allocated for an OpenDR detection vector structure (*detection_vector*).
-A pointer (*detection_vector*) to an OpenDR *opendr_detection_vector_target_t* should be provided.
+The *initDetectionsVector()* function initializes the data of an OpenDR detection vector structure (*vector*) with zero values.
+A pointer (*vector*) to an OpenDR *DetectionVectorTargetT* should be provided.
+
+### Function *loadDetectionsVector()*
+```C
+void loadDetectionsVector(OpendrDetectionVectorTargetT *vector, OpendrDetectionTargetT *detectionPtr, int vectorSize);
+```
+The *loadDetectionsVector()* function stores OpenDR vector of detections structures in the memory allocated for multiple OpenDR detections structures (*detectionPtr*).
+A pointer (*vector*) to an OpenDR *OpendrDetectionVectorTargetT* should be provided.
+
+### Function *freeDetectionsVector()*
+```C
+void freeDetectionsVector(OpendrDetectionVectorTargetT *vector);
+```
+The *freeDetectionsVector()* function releases the memory allocated for an OpenDR vector of detections structure (*vector*).
+A pointer (*vector*) to an OpenDR *OpendrDetectionVectorTargetT* should be provided.
+
+---
+
+### Function *initTensor()*
+```C
+void initTensor(OpendrTensorT *tensor);
+```
+The *initTensor()* function initialize the data of an OpenDR tensor (*tensor*) with zero values.
+A pointer (*tensor*) to an OpenDR *OpendrTensorT* should be provided.
+
+### Function *loadTensor()*
+```C
+void loadTensor(OpendrTensorT *tensor, void *tensorData, int batchSize, int frames, int channels, int width, int height);
+```
+The *loadTensor()* function allows for storing OpenDR tensor structures in to the memory allocated into a pointer into the OpenDR tensor structure (*opendr_tensor*).
+A pointer (*tensor*) to an OpenDR *OpendrTensorT* along with the pointer into the memory (*tensorData*) and the (*batchSize*), (*frames*), (*channels*), (*width*) and (*height*) of tensor should be provided. 
+All integers must have a minimum value of *1*.
+
+### Function *freeTensor()*
+```C
+void freeTensor(OpendrTensorT *tensor);
+```
+The *freeTensor()* function releases the memory allocated for an OpenDR tensor structure (*tensor*).
+A pointer (*tensor*) to an OpenDR *OpendrTensorT* should be provided.
+
+### Function *initTensorVector()*
+```C
+void initTensorVector(OpendrTensorVectorT *vector);
+```
+The *initTensorVector()* function initialize the data of an OpenDR vector of tensors (*vector*) with zero values.
+A pointer (*vector*) to an OpenDR *OpendrTensorVectorT* should be provided.
+
+### Function *loadTensorVector()*
+```C
+void loadTensorVector(OpendrTensorVectorT *vector, OpendrTensorT *tensorPtr, int nTensors);
+```
+The *loadTensorVector()* function allows for storing multiple OpenDR tensor structures in memory allocated by the OpenDR vector of tensors structure (*vector*).
+A pointer (*vector*) to an OpenDR *OpendrTensorVectorT* along with the pointer into the memory of a vector or array of OpenDR tensors structure (*tensorPtr*) should be provided.
+Moreover, the number of tensors (*nTensors*) should be included, and it must be better than *1*.
+
+### Function *freeTensorVector()*
+```C
+void freeTensorVector(OpendrTensorVectorT *vector);
+```
+The *freeTensorVector()* function releases the memory allocated for an OpenDR vector ot tensors structure (*vector*).
+A pointer (*vector*) to an OpenDR *OpendrTensorVectorT* should be provided.
+
+### Function *iterTensorVector()*
+```C
+void iterTensorVector(OpendrTensorT *tensor, OpendrTensorVectorT *vector, int index);
+```
+The *iterTensorVector()* function is used to help the user to iterate the OpenDR vector of tensors.
+A single OpenDR tensor (*tensor*) is loaded with the values of the indexed (*index*) tensor of the (*vector*).
+A pointer (*vector*) to an OpenDR *OpendrTensorVectorT* and an (*index*) along with a pointer (*tensor*) to an OpenDR *OpendrTensorT* should be provided.

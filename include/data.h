@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 OpenDR European Project
+ * Copyright 2020-2023 OpenDR European Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,16 +24,16 @@ extern "C" {
 /***
  * OpenDR data type for representing images
  */
-struct opendr_image {
+struct OpendrImage {
   void *data;
 };
-typedef struct opendr_image opendr_image_t;
+typedef struct OpendrImage OpendrImageT;
 
 /***
  * Opendr data type for representing tensors
  */
-struct opendr_tensor {
-  int batch_size;
+struct OpendrTensor {
+  int batchSize;
   int frames;
   int channels;
   int width;
@@ -41,22 +41,22 @@ struct opendr_tensor {
 
   float *data;
 };
-typedef struct opendr_tensor opendr_tensor_t;
+typedef struct OpendrTensor OpendrTensorT;
 
 /***
- * Opendr data type for representing tensor vectors
+ * Opendr data type for representing vectors of tensors
  */
-struct opendr_tensor_vector {
-  int n_tensors;
-  int *batch_sizes;
+struct OpendrTensorVector {
+  int nTensors;
+  int *batchSizes;
   int *frames;
   int *channels;
   int *widths;
   int *heights;
 
-  float **memories;
+  float **datas;
 };
-typedef struct opendr_tensor_vector opendr_tensor_vector_t;
+typedef struct OpendrTensorVector OpendrTensorVectorT;
 
 #ifdef __cplusplus
 }

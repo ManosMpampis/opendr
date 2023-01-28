@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 OpenDR European Project
+ * Copyright 2020-2023 OpenDR European Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,75 +21,75 @@
 
 START_TEST(image_load_test) {
   // Load an image and performance inference
-  opendr_image_t image;
+  OpendrImageT image;
   // An example of an image that exist
-  load_image("data/database/1/1.jpg", &image);
+  loadImage("data/database/1/1.jpg", &image);
   ck_assert(image.data);
   // An example of an image that does not exist
-  load_image("images/not_existant/1.jpg", &image);
+  loadImage("images/not_existant/1.jpg", &image);
   ck_assert(image.data == 0);
 
   // Free the resources
-  free_image(&image);
+  freeImage(&image);
 }
 END_TEST
 
 START_TEST(detection_vector_init_load_test) {
   // Initialize a detection target vector
-  opendr_detection_vector_target_t detection_vector;
+  OpendrDetectionVectorTargetT detection_vector;
   // init functions uses load internally
-  init_detections_vector(&detection_vector);
-  ck_assert(detection_vector.starting_pointer);
+  initDetectionsVector(&detection_vector);
+  ck_assert(detection_vector.startingPointer);
   // Free the resources
-  free_detections_vector(&detection_vector);
-  ck_assert(detection_vector.starting_pointer == NULL);
+  freeDetectionsVector(&detection_vector);
+  ck_assert(detection_vector.startingPointer == NULL);
 }
 END_TEST
 
 START_TEST(tensor_init_load_test) {
   // Initialize a detection target vector
-  opendr_tensor_t opendr_tensor;
+  OpendrTensorT opendr_tensor;
   // init functions uses load internally
-  init_tensor(&opendr_tensor);
+  initTensor(&opendr_tensor);
   ck_assert(opendr_tensor.data == NULL);
 
   void *tensor_data = malloc(1 * sizeof(float));
-  load_tensor(&opendr_tensor, tensor_data, 1, 1, 1, 1, 1);
+  loadTensor(&opendr_tensor, tensor_data, 1, 1, 1, 1, 1);
   ck_assert(opendr_tensor.data);
   // Free the resources
   free(tensor_data);
-  free_tensor(&opendr_tensor);
+  freeTensor(&opendr_tensor);
   ck_assert(opendr_tensor.data == NULL);
 }
 END_TEST
 
 START_TEST(tensor_vector_init_load_test) {
   // Initialize a detection target vector
-  opendr_tensor_vector_t tensor_vector;
+  OpendrTensorVectorT tensor_vector;
   // init functions uses load internally
-  init_tensor_vector(&tensor_vector);
+  initTensorVector(&tensor_vector);
 
-  ck_assert(tensor_vector.batch_sizes == NULL);
+  ck_assert(tensor_vector.batchSizes == NULL);
   ck_assert(tensor_vector.frames == NULL);
   ck_assert(tensor_vector.channels == NULL);
   ck_assert(tensor_vector.widths == NULL);
   ck_assert(tensor_vector.heights == NULL);
-  ck_assert(tensor_vector.memories == NULL);
+  ck_assert(tensor_vector.datas == NULL);
 
-  opendr_tensor_t tensor[1];
-  init_tensor(&(tensor[0]));
+  OpendrTensorT tensor[1];
+  initTensor(&(tensor[0]));
 
   void *tensor_data = malloc(1 * sizeof(float));
-  load_tensor(&(tensor[0]), tensor_data, 1, 1, 1, 1, 1);
+  loadTensor(&(tensor[0]), tensor_data, 1, 1, 1, 1, 1);
 
-  load_tensor_vector(&tensor_vector, tensor, 1);
-  ck_assert(tensor_vector.memories);
+  loadTensorVector(&tensor_vector, tensor, 1);
+  ck_assert(tensor_vector.datas);
   // Free the resources
   free(tensor_data);
-  free_tensor(&(tensor[0]));
+  freeTensor(&(tensor[0]));
 
-  free_tensor_vector(&tensor_vector);
-  ck_assert(tensor_vector.memories == NULL);
+  freeTensorVector(&tensor_vector);
+  ck_assert(tensor_vector.datas == NULL);
 }
 END_TEST
 
