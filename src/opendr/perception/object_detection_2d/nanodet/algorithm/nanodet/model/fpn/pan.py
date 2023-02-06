@@ -64,7 +64,7 @@ class PAN(FPN):
         )
         self.init_weights()
 
-    @torch.jit.unused
+    # @torch.jit.unused
     def forward(self, inputs: List[Tensor]):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)

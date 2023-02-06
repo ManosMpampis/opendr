@@ -109,6 +109,7 @@ def fill_fc_weights(layers):
 
 class ResNetSmall(nn.Module):
     resnet_spec = {
+        4: (BasicBlock, [1, 1]),
         18: (BasicBlock, [2, 2, 2, 2]),
         34: (BasicBlock, [3, 4, 6, 3]),
         50: (Bottleneck, [3, 4, 6, 3]),
@@ -117,7 +118,14 @@ class ResNetSmall(nn.Module):
     }
 
     def __init__(
-        self, depth, out_stages=(1, 2, 3, 4), activation="ReLU", pretrain=True
+        self,
+        depth,
+        first_conv_features=2,
+        out_stages=(1, 2, 3, 4),
+        stages_features=(2, 2, 3, 3),
+        stages_strides=(2, 2, 3, 3),
+        activation="ReLU",
+        pretrain=True
     ):
         super(ResNetSmall, self).__init__()
         if depth not in self.resnet_spec:
@@ -125,18 +133,23 @@ class ResNetSmall(nn.Module):
         assert set(out_stages).issubset((1, 2, 3, 4))
         self.activation = activation
         block, layers = self.resnet_spec[depth]
+        if len(stages_features) != len(layers):
+            raise KeyError(f"Not enough features for block it should be {len(layers)} and are {len(stages_features)}")
         self.depth = depth
-        self.inplanes = 64
+        self.inplanes = first_conv_features
         self.out_stages = out_stages
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=2, padding=1, bias=False)
+        # self.bn1 = nn.BatchNorm2d(2)
         self.act = act_layers(self.activation)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layers_list = nn.ModuleList()
+        for blocks, block_feature, block_strides in zip(layers, stages_features, stages_strides):
+            self.layers_list.append(self._make_layer(block, block_feature, blocks, stride=block_strides))
+        # self.layer1 = self._make_layer(block, 64, layers[0])
+        # self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        # self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        # self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.init_weights(pretrain=pretrain)
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -166,15 +179,19 @@ class ResNetSmall(nn.Module):
     @torch.jit.unused
     def forward(self, x):
         x = self.conv1(x)
-        x = self.bn1(x)
         x = self.act(x)
-        x = self.maxpool(x)
         output = []
-        for i in range(1, 5):
-            res_layer = getattr(self, "layer{}".format(i))
+        counter = 0
+        for res_layer in self.layers_list:
             x = res_layer(x)
-            if i in self.out_stages:
+            counter += 1
+            if counter in self.out_stages:
                 output.append(x)
+        # for i in range(1, 5):
+        #     res_layer = getattr(self, "layer{}".format(i))
+        #     x = res_layer(x)
+        #     if i in self.out_stages:
+        #         output.append(x)
 
         return output
 

@@ -45,11 +45,11 @@ class Predictor(nn.Module):
         self.traced_model = None
 
     def trace_model(self, dummy_input):
-        self.traced_model = torch.jit.trace(self, dummy_input)
+        self.traced_model = torch.jit.trace(self.model, dummy_input)
         return True
 
     def script_model(self, img, height, width, warp_matrix):
-        preds = self.traced_model(img, height, width, warp_matrix)
+        preds = self.traced_model(img)
         scripted_model = self.postprocessing(preds, img, height, width, warp_matrix)
         return scripted_model
 

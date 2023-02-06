@@ -90,8 +90,8 @@ class GFLHead(nn.Module):
     :param num_classes: Number of categories excluding the background category.
     :param loss: Config of all loss functions.
     :param input_channel: Number of channels in the input feature map.
-    :param feat_channels: Number of conv layers in cls and reg tower. Default: 4.
     :param stacked_convs: Number of conv layers in cls and reg tower. Default: 4.
+    :param feat_channels: Number of conv layers in cls and reg tower. Default: 4.
     :param octave_base_scale: Scale factor of grid cells.
     :param strides: Down sample strides of all level feature map
     :param conv_cfg: Dictionary to construct and config conv layer. Default: None.
@@ -580,11 +580,6 @@ class GFLHead(nn.Module):
             det = torch.cat([det, pad], dim=0)
             det_result[i] = det
         return det_result
-
-    def most_common_tensor(self, tensor):
-        _, frequencies = torch.unique(tensor, return_counts=True)
-        max_count = frequencies[torch.argmax(frequencies)].item()
-        return max_count
 
     def _eval_post_process(self, preds, meta):
         cls_scores, bbox_preds = preds.split(

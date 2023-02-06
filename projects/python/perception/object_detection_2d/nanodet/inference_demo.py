@@ -24,14 +24,14 @@ if __name__ == '__main__':
     parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m")
     parser.add_argument("--path", help="Path to the image that is used for inference", type=str,
                         default="./predefined_examples/000000000036.jpg")
-    parser.add_argument("--optimize", help="If specified will determine the optimization to be used (onnx, jit)",
-                        type=str, default="", choices=["", "onnx", "jit"])
+    parser.add_argument("--optimize", help="If specified will determine the optimization to be used (onnx, jit, trt)",
+                        type=str, default="trt", choices=["", "onnx", "jit", "trt"])
     args = parser.parse_args()
 
     nanodet = NanodetLearner(model_to_use=args.model, device=args.device)
-    nanodet.download("./predefined_examples", mode="pretrained")
+    # nanodet.download("./predefined_examples", mode="pretrained")
     nanodet.load("./predefined_examples/nanodet_{}".format(args.model), verbose=True)
-    nanodet.download("./predefined_examples", mode="images")
+    # nanodet.download("./predefined_examples", mode="images")
 
     img = Image.open(args.path)
 

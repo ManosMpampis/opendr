@@ -41,8 +41,8 @@ def load_model_weight(model, checkpoint, verbose=None):
             if state_dict[k].shape != model_state_dict[k].shape:
                 if verbose:
                     print(
-                        "Skip loading parameter {}, required shape{}, "
-                        "loaded shape{}.".format(
+                        "Skip loading parameter {}, required shape {}, "
+                        "loaded shape {}.".format(
                             k, model_state_dict[k].shape, state_dict[k].shape
                         )
                     )

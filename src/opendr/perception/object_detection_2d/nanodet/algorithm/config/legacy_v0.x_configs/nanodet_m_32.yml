@@ -1,30 +1,34 @@
 #Config File example
-save_dir: ./temp/nanodet_m
-check_point_name: m
+save_dir: ./temp/nanodet_m_32
+check_point_name: m_32
 model:
   arch:
     name: OneStageDetector
     backbone:
-      name: ShuffleNetV2
-      model_size: 1.0x
-      out_stages: [2,3,4]
+      name: ResNetSmall
+      depth: 4
+      first_conv_features: 2
+      out_stages: [1, 2]
+      stages_features: [2, 4]
+      stages_strides: [2, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
       activation: LeakyReLU
+      pretrain: False
     fpn:
-      name: PAN
-      in_channels: [116, 232, 464]
-      out_channels: 96
+      name: FPN
+      in_channels: [2, 4]
+      out_channels: 4
       start_level: 0
-      num_outs: 3
+      num_outs: 2
     head:
       name: NanoDetHead
       num_classes: 80
-      input_channel: 96
-      feat_channels: 96
-      stacked_convs: 2
+      input_channel: 4 #Out channel of fpn
+      feat_channels: 3
+      stacked_convs: 1 #Its pass in head have so many conv in list
       share_cls_reg: True
       octave_base_scale: 5
       scales_per_octave: 1
-      strides: [8, 16, 32]
+      strides: [4, 8] #Set of last pass of all layers in head from the coresponding layer
       reg_max: 7
       norm_cfg:
         type: BN
@@ -42,7 +46,7 @@ model:
           loss_weight: 2.0
 data:
   train:
-    input_size: [320,320] #[w,h]
+    input_size: [96, 96] #[w,h]
     keep_ratio: True
     pipeline:
       perspective: 0.0
@@ -57,7 +61,7 @@ data:
       saturation: [0.5, 1.2]
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   val:
-    input_size: [320,320] #[w,h]
+    input_size: [1088, 1920] #[w,h]
     keep_ratio: True
     pipeline:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
