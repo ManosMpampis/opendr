@@ -31,10 +31,8 @@ def search_on_path(filenames):
 
 def get_cuda_path():
     nvcc_path = search_on_path(('nvcc', 'nvcc.exe'))
-    cuda_path_default = None
     if nvcc_path is not None:
-        cuda_path_default = os.path.normpath(os.path.join(os.path.dirname(nvcc_path), '..', '..'))
-    if cuda_path_default is not None:
+        cuda_path_default = os.path.normpath(os.path.join(os.path.dirname(nvcc_path), '..'))
         _cuda_path = cuda_path_default
     elif os.path.exists('/usr/local/cuda'):
         _cuda_path = '/usr/local/cuda'
@@ -53,6 +51,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     COMPATIBILITY_VERSIONS = {
+        "1.13.1": "0.14.1",
         "1.13.0": "0.14.0",
         "1.12.0": "0.13.0",
         "1.11.0": "0.12.0",
@@ -83,14 +82,16 @@ if __name__ == '__main__':
                 version_line = version_file.readlines()
                 version_line = version_line[0].replace(".", "")
                 CUDA_VERSION = version_line[13:16]
+                version_file.close()
             elif version_file_type[0].endswith('.json'):
                 version_file = open(f"{CUDA_PATH}/version.json", mode='r')
                 version_dict = json.load(version_file)
                 CUDA_VERSION = version_dict["cuda"]["version"]
                 CUDA_VERSION = CUDA_VERSION.replace(".", "")
                 CUDA_VERSION = CUDA_VERSION[:3]
+                version_file.close()
             else:
-                warnings.warn("\033[93m Not CUDA version file found.")
+                warnings.warn("\033[93m No CUDA version file found.")
             DEVICE = f"cu{CUDA_VERSION}"
         except:
             warnings.warn("\033[93m No CUDA installation found.\n"

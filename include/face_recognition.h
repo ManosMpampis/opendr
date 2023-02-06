@@ -69,6 +69,7 @@ void loadFaceRecognitionModel(const char *modelPath, FaceRecognitionModelT *mode
  * @param image OpenDR image
  * @return OpenDR classification target containing the id of the recognized person
  */
+OpenDRCategoryTargetT inferFaceRecognition(FaceRecognitionModelT *model, OpenDRImageT *image);
 OpendrCategoryTargetT inferFaceRecognition(FaceRecognitionModelT *model, OpendrImageT *image);
 
 /**
@@ -95,7 +96,7 @@ void loadDatabaseFaceRecognition(const char *databasePath, FaceRecognitionModelT
  * @param category the predicted category
  * @param personName buffer to store the person name
  */
-void decodeCategoryFaceRecognition(FaceRecognitionModelT *model, OpendrCategoryTargetT category, char *personName);
+void decodeCategoryFaceRecognition(FaceRecognitionModelT *model, OpenDRCategoryTargetT category, char *personName);
 
 /**
  * Releases the memory allocated for a face recognition model.

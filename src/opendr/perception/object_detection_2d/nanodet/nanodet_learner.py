@@ -549,23 +549,19 @@ class NanodetLearner(Learner):
         """
 
         optimization = optimization.lower()
-        # if not os.path.exists(export_path):
-        if optimization == "jit":
-            self._save_jit(export_path, verbose=verbose, nms_max_num=nms_max_num)
-        elif optimization == "onnx":
-            self._save_onnx(export_path, verbose=verbose, nms_max_num=nms_max_num)
-        elif optimization == "trt":
-            self._save_trt(export_path, verbose=verbose, nms_max_num=nms_max_num)
-        else:
-            assert NotImplementedError
+        if not os.path.exists(export_path):
+            if optimization == "jit":
+                self._save_jit(export_path, verbose=verbose, nms_max_num=nms_max_num)
+            elif optimization == "onnx":
+                self._save_onnx(export_path, verbose=verbose, nms_max_num=nms_max_num)
+            else:
+                assert NotImplementedError
         with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
             metadata = json.load(f)
         if optimization == "jit":
             self._load_jit(os.path.join(export_path, metadata["model_paths"][0]), verbose)
         elif optimization == "onnx":
             self._load_onnx(os.path.join(export_path, metadata["model_paths"][0]), verbose)
-        elif optimization == "trt":
-            self._load_trt(os.path.join(export_path, metadata["model_paths"][0]), verbose)
         else:
             assert NotImplementedError
 
