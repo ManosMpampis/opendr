@@ -549,19 +549,23 @@ class NanodetLearner(Learner):
         """
 
         optimization = optimization.lower()
-        if not os.path.exists(export_path):
-            if optimization == "jit":
-                self._save_jit(export_path, verbose=verbose, nms_max_num=nms_max_num)
-            elif optimization == "onnx":
-                self._save_onnx(export_path, verbose=verbose, nms_max_num=nms_max_num)
-            else:
-                assert NotImplementedError
+        # if not os.path.exists(export_path):
+        if optimization == "jit":
+            self._save_jit(export_path, verbose=verbose, nms_max_num=nms_max_num)
+        elif optimization == "onnx":
+            self._save_onnx(export_path, verbose=verbose, nms_max_num=nms_max_num)
+        elif optimization == "trt":
+            self._save_trt(export_path, verbose=verbose, nms_max_num=nms_max_num)
+        else:
+            assert NotImplementedError
         with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
             metadata = json.load(f)
         if optimization == "jit":
             self._load_jit(os.path.join(export_path, metadata["model_paths"][0]), verbose)
         elif optimization == "onnx":
             self._load_onnx(os.path.join(export_path, metadata["model_paths"][0]), verbose)
+        elif optimization == "trt":
+            self._load_trt(os.path.join(export_path, metadata["model_paths"][0]), verbose)
         else:
             assert NotImplementedError
 
@@ -732,20 +736,23 @@ class NanodetLearner(Learner):
         test_results = (verbose or logging)
         return trainer.test(self.task, val_dataloader, verbose=test_results)
 
-    def infer(self, input, threshold=0.35, nms_max_num=100):
+    def infer(self, input, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100):
         """
         Performs inference
         :param input: input image to perform inference on
         :type input: opendr.data.Image
-        :param threshold: confidence threshold
-        :type threshold: float, optional
+        :param conf_threshold: confidence threshold
+        :type conf_threshold: float, optional
+        :param iou_threshold: iou threshold
+        :type iou_threshold: float, optional
         :param nms_max_num: determines the maximum number of bounding boxes that will be retained following the nms.
         :type nms_max_num: int
         :return: list of bounding boxes of last image of input or last frame of the video
         :rtype: opendr.engine.target.BoundingBoxList
         """
         if not self.predictor:
-            self.predictor = Predictor(self.cfg, self.model, device=self.device, nms_max_num=nms_max_num)
+            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
 
         if not isinstance(input, Image):
             input = Image(input)
@@ -765,7 +772,7 @@ class NanodetLearner(Learner):
                 warnings.warn(
                     "Warning: Both JIT and TensorRT models are initialized, inference will run in JIT mode by default.\n"
                     "To run in TensorRT please delete the self.jit_model like: detector.jit_model = None.")
-            res = self.jit_model(_input, *metadata).cpu()
+            res = self.jit_model(_input, *metadata)
         elif self.trt_model:
             preds = self.trt_model(_input)
             res = self.predictor.postprocessing(preds, _input, *metadata)
@@ -774,16 +781,15 @@ class NanodetLearner(Learner):
             res = self.predictor.postprocessing(preds, _input, *metadata)
 
         bounding_boxes = []
-        for label in range(len(res)):
-            for box in res[label]:
-                score = box[-1]
-                if score > threshold:
-                    bbox = BoundingBox(left=box[0], top=box[1],
-                                       width=box[2] - box[0],
-                                       height=box[3] - box[1],
-                                       name=label,
-                                       score=score)
-                    bounding_boxes.append(bbox)
+        for label in res:
+            for box in label:
+                box = box.to("cpu")
+                bbox = BoundingBox(left=box[0], top=box[1],
+                                   width=box[2] - box[0],
+                                   height=box[3] - box[1],
+                                   name=box[5],
+                                   score=box[4])
+                bounding_boxes.append(bbox)
         bounding_boxes = BoundingBoxList(bounding_boxes)
         bounding_boxes.data.sort(key=lambda v: v.confidence)
 

@@ -70,7 +70,6 @@ void loadFaceRecognitionModel(const char *modelPath, FaceRecognitionModelT *mode
  * @return OpenDR classification target containing the id of the recognized person
  */
 OpenDRCategoryTargetT inferFaceRecognition(FaceRecognitionModelT *model, OpenDRImageT *image);
-OpendrCategoryTargetT inferFaceRecognition(FaceRecognitionModelT *model, OpendrImageT *image);
 
 /**
  * Builds a face recognition database (containing images for persons to be recognized). This function expects the
