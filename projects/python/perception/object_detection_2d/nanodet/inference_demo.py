@@ -25,19 +25,24 @@ if __name__ == '__main__':
     parser.add_argument("--path", help="Path to the image that is used for inference", type=str,
                         default="./predefined_examples/000000000036.jpg")
     parser.add_argument("--optimize", help="If specified will determine the optimization to be used (onnx, jit)",
-                        type=str, default="", choices=["", "onnx", "jit"])
+                        type=str, default="", choices=["", "onnx", "jit", "trt"])
+    parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.35)
+    parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.6)
+    parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=30)
+    parser.add_argument("--show", help="do not show image", action="store_false")
     args = parser.parse_args()
 
     nanodet = NanodetLearner(model_to_use=args.model, device=args.device)
     # nanodet.download("./predefined_examples", mode="pretrained")
     nanodet.load("./predefined_examples/nanodet_{}".format(args.model), verbose=True)
-    nanodet.download("./predefined_examples", mode="images")
+    # nanodet.download("./predefined_examples", mode="images")
 
     img = Image.open(args.path)
 
     if args.optimize != "":
         nanodet.optimize("./{}/nanodet_{}".format(args.optimize, args.model), optimization=args.optimize)
 
-    boxes = nanodet.infer(input=img, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=20)
+    boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
+                          nms_max_num=args.nms)
 
-    draw_bounding_boxes(img.opencv(), boxes, class_names=nanodet.classes, show=True)
+    draw_bounding_boxes(img.opencv(), boxes, class_names=nanodet.classes, show=args.show)

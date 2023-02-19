@@ -16,6 +16,7 @@
 
 import torch
 import torch.nn as nn
+import cv2
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.batch_process import divisible_padding
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transform import Pipeline
@@ -47,13 +48,13 @@ class Predictor(nn.Module):
         self.traced_model = None
 
     def trace_model(self, dummy_input):
-        # self.traced_model = torch.jit.trace(self, dummy_input)
-        self.traced_model = torch.jit.trace(self.model, dummy_input)
+        self.traced_model = torch.jit.trace(self, dummy_input)
+        # self.traced_model = torch.jit.trace(self.model, dummy_input)
         return True
 
     def script_model(self, img, height, width, warp_matrix):
         preds = self.traced_model(img, height, width, warp_matrix)
-        preds = self.traced_model(img)
+        # preds = self.traced_model(img)
         scripted_model = self.postprocessing(preds, img, height, width, warp_matrix)
         return scripted_model
 
@@ -64,6 +65,8 @@ class Predictor(nn.Module):
         # cv2 is needed, and it is installed with abi cxx11 but torch is in cxx<11
         meta = {"img": img}
         meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
+        # cv2.imshow("temp", meta["img"].cpu().squeeze(0).permute(1,2,0).numpy())
+        # cv2.waitKey(0)
         with torch.no_grad():
             results = self.model.inference(meta)
         return results

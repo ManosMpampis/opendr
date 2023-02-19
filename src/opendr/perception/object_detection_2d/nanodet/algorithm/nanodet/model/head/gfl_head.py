@@ -668,10 +668,10 @@ class GFLHead(nn.Module):
         # get grid cells of one image
         mlvl_center_priors = []
         for i, stride in enumerate(self.strides):
-            proiors = self.get_single_level_center_priors(
-                b, featmap_sizes[i], stride, torch.float32, device
+            priors = self.get_single_level_center_priors(
+                b, featmap_sizes[i], stride, cls_preds.dtype, device
             )
-            mlvl_center_priors.append(proiors)
+            mlvl_center_priors.append(priors)
 
         center_priors = torch.cat(mlvl_center_priors, dim=1)
         dis_preds = self.distribution_project(reg_preds) * center_priors[..., 2, None]
@@ -726,8 +726,8 @@ class GFLHead(nn.Module):
         """
         x, y = self.get_single_level_center_point(featmap_size, stride, dtype, device, flatten)
         strides = x.new_full((x.shape[0],), stride)
-        proiors = torch.stack([x, y, strides, strides], dim=-1)
-        return proiors.unsqueeze(0).repeat(batch_size, 1, 1)
+        priors = torch.stack([x, y, strides, strides], dim=-1)
+        return priors.unsqueeze(0).repeat(batch_size, 1, 1)
 
     def get_single_level_center_point(
         self,

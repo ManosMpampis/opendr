@@ -21,27 +21,29 @@ from opendr.perception.object_detection_2d import draw_bounding_boxes
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m_32")
-    parser.add_argument("--optimize-jit", help="", default=False, action="store_true")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m")
+    parser.add_argument("--optimize-jit", help="", action="store_false")
     parser.add_argument("--optimize-onnx", help="", default=False, action="store_true")
     parser.add_argument("--repetitions", help="Determines the amount of repetitions to run", type=int, default=1000)
     parser.add_argument("--warmup", help="Determines the amount of warmup runs", type=int, default=100)
+    parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.35)
+    parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.6)
     parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=30)
     parser.add_argument("--path", help="Path to the image that is used for inference", type=str,
                         default="./predefined_examples/000000000036.jpg")
     args = parser.parse_args()
 
-    nanodet = NanodetLearner(model_to_use=args.model, device=args.device, model_log_name="m_32")
-    # nanodet.download("./predefined_examples", mode="pretrained", verbose=False)
-    # nanodet.load("./predefined_examples/nanodet_{}".format(args.model), verbose=False)
-    # nanodet.download("./predefined_examples", mode="images", verbose=False)
-    #
+    nanodet = NanodetLearner(model_to_use=args.model, device=args.device, model_log_name=f"{args.model}")
+    nanodet.download("./predefined_examples", mode="pretrained", verbose=False)
+    nanodet.load("./predefined_examples/nanodet_{}".format(args.model), verbose=False)
+    nanodet.download("./predefined_examples", mode="images", verbose=False)
+
     img = Image.open(args.path)
-    #
-    #
-    # if args.optimize_jit:
-    #     nanodet.optimize(f"./jit/nanodet_{args.model}", optimization="jit", verbose=False)
-    # if args.optimize_onnx:
-    #     nanodet.optimize(f"./onnx/nanodet_{args.model}", optimization="onnx", verbose=False)
-    #
-    nanodet.benchmark(img, repetitions=args.repetitions, warmup=args.warmup, nms_max_num=args.nms)
+
+    if args.optimize_jit:
+        nanodet.optimize(f"./jit/nanodet_{args.model}", optimization="jit", verbose=False)
+    if args.optimize_onnx:
+        nanodet.optimize(f"./onnx/nanodet_{args.model}", optimization="onnx", verbose=False)
+
+    nanodet.benchmark(img, repetitions=args.repetitions, warmup=args.warmup, conf_threshold=args.conf_threshold,
+                      iou_threshold=args.iou_threshold, nms_max_num=args.nms)

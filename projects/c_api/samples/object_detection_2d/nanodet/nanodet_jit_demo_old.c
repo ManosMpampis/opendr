@@ -21,46 +21,25 @@
 
 int main(int argc, char **argv) {
 <<<<<<< HEAD
-  if (argc != 6) {
+  if (argc != 3) {
     fprintf(stderr,
-            "usage: %s [model_path] [device] [images_path] [input_sizes].\n"
-            "model_path = path/to/your/libtorch/model.pth \ndevice = cuda or cpu \n"
-            "images_path = \"xxx/xxx/*.jpg\" \ninput_size = width height.\n",
+            "usage: %s [model_path] [images_path].\n"
+            "model_path = path/to/your/libtorch/model.pth\n"
+            "images_path = \"xxx/xxx/*.jpg\",
             argv[0]);
     return -1;
   }
 
   NanodetModelT model;
 
-  int height = atoi(argv[4]);
-  int width = atoi(argv[5]);
   printf("start init model\n");
-  loadNanodetModel(argv[1], argv[2], height, width, 0.35, &model);
+  loadNanodetModel(argv[1], "cuda", 0, 0, 0, &model);
   printf("success\n");
 
   OpendrImageT image;
 
-  loadImage(argv[3], &image);
-//  NanodetModelT model;
-//
-//  printf("start init model\n");
-//  loadNanodetModel("./data/object_detection_2d/nanodet/optimized_model", "m", "cuda", 0.35, 0, 0, &model);
-//  printf("success\n");
-//
-//  OpenDRImageT image;
-//
-//  loadImage("data/object_detection_2d/nanodet/database/000000000036.jpg", &image);
-=======
-  NanodetModelT model;
+  loadImage(argv[2], &image);
 
-  printf("start init model\n");
-  loadNanodetModel("./data/object_detection_2d/nanodet/new_opt_model", "m", "cuda", 0.35, 0, 0, &model);
-  printf("success\n");
-
-  OpenDRImageT image;
-
-  loadImage("data/object_detection_2d/nanodet/database/000000000036.jpg", &image);
->>>>>>> 0678095fb4d8b678bda62329df8ef424ee81df33
   if (!image.data) {
     printf("Image not found!");
     return 1;
@@ -70,10 +49,9 @@ int main(int argc, char **argv) {
   OpenDRDetectionVectorTargetT results;
   initDetectionsVector(&results);
 
-  double temp;
-  results = inferNanodet(&model, &image, &temp);
+  results = inferNanodet(&model, &image);
 
-  drawBboxes(&image, &model, &results);
+  drawBboxes(&image, &model, &results, 0);
 
   // Free the memory
   freeDetectionsVector(&results);
