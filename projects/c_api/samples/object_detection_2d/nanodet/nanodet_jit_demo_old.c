@@ -20,12 +20,13 @@
 #include "opendr_utils.h"
 
 int main(int argc, char **argv) {
-<<<<<<< HEAD
-  if (argc != 3) {
+
+  if (argc != 4) {
     fprintf(stderr,
-            "usage: %s [model_path] [images_path].\n"
+            "usage: %s [model_path] [model_prefix] [images_path].\n"
             "model_path = path/to/your/libtorch/model.pth\n"
-            "images_path = \"xxx/xxx/*.jpg\",
+            "model_prefix = m\n"
+            "images_path = \"xxx/xxx/*.jpg\"\n",
             argv[0]);
     return -1;
   }
@@ -33,12 +34,12 @@ int main(int argc, char **argv) {
   NanodetModelT model;
 
   printf("start init model\n");
-  loadNanodetModel(argv[1], "cuda", 0, 0, 0, &model);
+  loadNanodetModel(argv[1], argv[2], "cuda", 0, 0, 0, &model);
   printf("success\n");
 
   OpendrImageT image;
 
-  loadImage(argv[2], &image);
+  loadImage(argv[3], &image);
 
   if (!image.data) {
     printf("Image not found!");

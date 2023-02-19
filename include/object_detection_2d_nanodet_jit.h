@@ -66,6 +66,15 @@ void loadNanodetModel(const char *modelPath, const char *modelName, const char *
 OpenDRDetectionVectorTargetT inferNanodet(NanodetModelT *model, OpenDRImageT *image);
 
 /**
+ * performes benchmark in model
+ * @param model
+ * @param image
+ * @param repetitions
+ * @param warmup
+ */
+void benchmarkNanodet(NanodetModelT *model, OpenDRImageT *image, int repetitions, int warmup);
+
+/**
  * Releases the memory allocated for a nanodet object detection model.
  * @param model model to be de-allocated
  */
