@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "object_detection_2d_nanodet_jit.h"
@@ -23,7 +24,7 @@ int main(int argc, char **argv) {
   NanodetModelT model;
 
   printf("start init model\n");
-  loadNanodetModel("./data/object_detection_2d/nanodet/new_opt_model", "m", "cuda", 0.35, 0, 0, &model);
+  loadNanodetModel("./data/object_detection_2d/nanodet/optimized_model", "m", "cuda", 0.35, 0, 0, &model);
   printf("success\n");
 
   OpenDRImageT image;
@@ -38,10 +39,9 @@ int main(int argc, char **argv) {
   OpenDRDetectionVectorTargetT results;
   initDetectionsVector(&results);
 
-  double temp;
-  results = inferNanodet(&model, &image, &temp);
+  results = inferNanodet(&model, &image);
 
-  drawBboxes(&image, &model, &results);
+  drawBboxes(&image, &model, &results, 0);
 
   // Free the memory
   freeDetectionsVector(&results);
