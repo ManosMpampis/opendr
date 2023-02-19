@@ -33,9 +33,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     nanodet = NanodetLearner(model_to_use=args.model, device=args.device)
-    # nanodet.download("./predefined_examples", mode="pretrained")
+    nanodet.download("./predefined_examples", mode="pretrained")
     nanodet.load("./predefined_examples/nanodet_{}".format(args.model), verbose=True)
-    # nanodet.download("./predefined_examples", mode="images")
+    nanodet.download("./predefined_examples", mode="images")
 
     img = Image.open(args.path)
 

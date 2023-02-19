@@ -361,7 +361,7 @@ class NanodetLearner(Learner):
         """This method is not used in this implementation."""
         return NotImplementedError
 
-    def __dummy_input(self, cv_compatible=False):
+    def __dummy_input(self):
         width, height = self.cfg.data.val.input_size
         dummy_input = (
             torch.randn((3, width, height), device=self.device, dtype=torch.float32),
@@ -377,7 +377,8 @@ class NanodetLearner(Learner):
 
     def _save_onnx(self, onnx_path, do_constant_folding=False, verbose=True, nms_max_num=100):
         if not self.predictor:
-            self.predictor = Predictor(self.cfg, self.model, device=self.device, nms_max_num=nms_max_num)
+            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
 
         os.makedirs(onnx_path, exist_ok=True)
         export_path = os.path.join(onnx_path, "nanodet_{}.onnx".format(self.cfg.check_point_name))
@@ -400,7 +401,8 @@ class NanodetLearner(Learner):
 
         metadata = {"model_paths": ["nanodet_{}.onnx".format(self.cfg.check_point_name)], "framework": "pytorch",
                     "format": "onnx", "has_data": False, "optimized": True, "optimizer_info": {},
-                    "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes}}
+                    "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
+                                         "conf_threshold": conf_threshold, "iou_threshold": iou_threshold}}
 
         with open(os.path.join(onnx_path, "nanodet_{}.json".format(self.cfg.check_point_name)),
                   'w', encoding='utf-8') as f:
@@ -509,7 +511,8 @@ class NanodetLearner(Learner):
 
     def _save_jit(self, jit_path, verbose=True, nms_max_num=100):
         if not self.predictor:
-            self.predictor = Predictor(self.cfg, self.model, device=self.device, nms_max_num=nms_max_num)
+            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
 
         os.makedirs(jit_path, exist_ok=True)
 
@@ -522,7 +525,8 @@ class NanodetLearner(Learner):
 
             metadata = {"model_paths": ["nanodet_{}.pth".format(self.cfg.check_point_name)], "framework": "pytorch",
                         "format": "pth", "has_data": False, "optimized": True, "optimizer_info": {},
-                        "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes}}
+                        "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
+                                             "conf_threshold": conf_threshold, "iou_threshold": iou_threshold}}
             model_traced.save(export_path)
 
             with open(os.path.join(jit_path, "nanodet_{}.json".format(self.cfg.check_point_name)),
@@ -538,7 +542,8 @@ class NanodetLearner(Learner):
 
         self.jit_model = torch.jit.load(jit_path, map_location=self.device)
 
-    def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100):
+    def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6,
+                 nms_max_num=100):
         """
         Method for optimizing the model with ONNX or JIT.
         :param export_path: The file path to the folder where the optimized model will be saved. If a model already
@@ -548,6 +553,10 @@ class NanodetLearner(Learner):
         :type verbose: bool, optional
         :param optimization: the kind of optimization you want to perform [jit, onnx]
         :type optimization: str
+        :param conf_threshold: confidence threshold
+        :type conf_threshold: float, optional
+        :param iou_threshold: iou threshold
+        :type iou_threshold: float, optional
         :param nms_max_num: determines the maximum number of bounding boxes that will be retained following the nms.
         :type nms_max_num: int
         """
@@ -555,11 +564,14 @@ class NanodetLearner(Learner):
         optimization = optimization.lower()
         # if not os.path.exists(export_path):
         if optimization == "jit":
-            self._save_jit(export_path, verbose=verbose, nms_max_num=nms_max_num)
+            self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+                           nms_max_num=nms_max_num)
         elif optimization == "onnx":
-            self._save_onnx(export_path, verbose=verbose, nms_max_num=nms_max_num)
+            self._save_onnx(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+                            nms_max_num=nms_max_num)
         elif optimization == "trt":
-            self._save_trt(export_path, verbose=verbose, nms_max_num=nms_max_num)
+            self._save_trt(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+                           nms_max_num=nms_max_num)
         else:
             assert NotImplementedError
         with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
