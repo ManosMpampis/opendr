@@ -50,23 +50,6 @@ int main(int argc, char **argv) {
 
  loadImage(argv[3], &opImage);
 
- //  cv::Mat frame(height,width,CV_8UC3);
- //  for(int i = 0; i < frame.rows; i++) {
- //    for(int j = 0; j < frame.cols; j++) {
- //      frame.at<cv::Vec3b>(i, j)[0] = rand() % 256;
- //      frame.at<cv::Vec3b>(i, j)[1] = rand() % 256;
- //      frame.at<cv::Vec3b>(i, j)[2] = rand() % 256;
- //    }
- //  }
- //
- //  OpenDRImageT opImage;
- //  // Add frame data to OpenDR Image
- //  if (frame.empty()) {
- //    opImage.data = NULL;
- //  } else {
- //    cv::Mat *tempMatPtr = new cv::Mat(frame);
- //    opImage.data = (void *)tempMatPtr;
- //  }
  char *prep;
  long argrep = strtol(argv[4], &prep, 10);
 
