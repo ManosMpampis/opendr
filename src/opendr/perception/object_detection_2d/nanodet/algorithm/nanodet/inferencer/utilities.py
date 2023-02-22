@@ -24,13 +24,14 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch 
 
 
 class Predictor(nn.Module):
-    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, mix=False):
         super(Predictor, self).__init__()
         self.cfg = cfg
         self.device = device
         self.conf_thresh = conf_thresh
         self.iou_thresh = iou_thresh
         self.nms_max_num = nms_max_num
+        self.mix = mix
         if self.cfg.model.arch.backbone.name == "RepVGG":
             deploy_config = self.cfg.model
             deploy_config.arch.backbone.update({"deploy": True})
@@ -67,7 +68,10 @@ class Predictor(nn.Module):
         meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
         # cv2.imshow("temp", meta["img"].cpu().squeeze(0).permute(1,2,0).numpy())
         # cv2.waitKey(0)
-        with torch.no_grad():
+        if self.mix:
+            with torch.cuda.amp.autocast():
+                results = self.model.inference(meta)
+        else:
             results = self.model.inference(meta)
         return results
 

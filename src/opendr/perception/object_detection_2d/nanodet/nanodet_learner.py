@@ -50,7 +50,7 @@ import onnxruntime as ort
 
 _MODEL_NAMES = {"EfficientNet_Lite0_320", "EfficientNet_Lite1_416", "EfficientNet_Lite2_512",
                 "RepVGG_A0_416", "t", "g", "m", "m_416", "m_0.5x", "m_1.5x", "m_1.5x_416",
-                "plus_m_320", "plus_m_1.5x_320", "plus_m_416", "plus_m_1.5x_416", "m_32", "custom"}
+                "plus_m_320", "plus_m_1.5x_320", "plus_m_416", "plus_m_1.5x_416", "m_32", "vgg_64", "custom"}
 
 
 class NanodetLearner(Learner):
@@ -375,10 +375,11 @@ class NanodetLearner(Learner):
         width, height = self.cfg.data.val.input_size
         return torch.randn((width, height, 3), device="cpu", dtype=torch.float32).numpy()
 
-    def _save_onnx(self, onnx_path, do_constant_folding=False, verbose=True, nms_max_num=100):
+    def _save_onnx(self, onnx_path, do_constant_folding=False, verbose=True, conf_thresh=0.35,
+                   iou_thresh=0.6, nms_max_num=100):
         if not self.predictor:
-            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
+            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
+                                       iou_thresh=iou_thresh, nms_max_num=nms_max_num)
 
         os.makedirs(onnx_path, exist_ok=True)
         export_path = os.path.join(onnx_path, "nanodet_{}.onnx".format(self.cfg.check_point_name))
@@ -402,7 +403,7 @@ class NanodetLearner(Learner):
         metadata = {"model_paths": ["nanodet_{}.onnx".format(self.cfg.check_point_name)], "framework": "pytorch",
                     "format": "onnx", "has_data": False, "optimized": True, "optimizer_info": {},
                     "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
-                                         "conf_threshold": conf_threshold, "iou_threshold": iou_threshold}}
+                                         "conf_threshold": conf_thresh, "iou_threshold": iou_thresh}}
 
         with open(os.path.join(onnx_path, "nanodet_{}.json".format(self.cfg.check_point_name)),
                   'w', encoding='utf-8') as f:
@@ -509,7 +510,8 @@ class NanodetLearner(Learner):
     #
     #     self.jit_model = torch.jit.load(trt_path, map_location=self.device)
 
-    def _save_jit(self, jit_path, verbose=True, nms_max_num=100):
+    def _save_jit(self, jit_path, verbose=True, conf_threshold=0.35, iou_threshold=0.6,
+                  nms_max_num=100):
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
                                        iou_thresh=iou_threshold, nms_max_num=nms_max_num)
@@ -567,11 +569,11 @@ class NanodetLearner(Learner):
             self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
                            nms_max_num=nms_max_num)
         elif optimization == "onnx":
-            self._save_onnx(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+            self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
                             nms_max_num=nms_max_num)
-        elif optimization == "trt":
-            self._save_trt(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
-                           nms_max_num=nms_max_num)
+        # elif optimization == "trt":
+        #     self._save_trt(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+        #                    nms_max_num=nms_max_num)
         else:
             assert NotImplementedError
         with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
@@ -811,7 +813,7 @@ class NanodetLearner(Learner):
 
         return bounding_boxes
 
-    def benchmark(self, input, repetitions=1000, warmup=100, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100):
+    def benchmark(self, repetitions=1000, warmup=100, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, mix=False):
         """
         Performs inference
         :param repetitions: input image to perform inference on
@@ -824,14 +826,11 @@ class NanodetLearner(Learner):
 
         import numpy as np
 
-        # if not isinstance(input, Image):
-        #     input = Image(input)
-        # preprocess_input = input.opencv()
         dummy_input = self.__cv_dumy_input()
 
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, mix=mix)
 
         # Preprocess measurement
         preprocess_starter, preprocess_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
@@ -879,7 +878,6 @@ class NanodetLearner(Learner):
                 jit_infer_ender.record()
                 torch.cuda.synchronize()
                 jit_infer_timings[run] = jit_infer_starter.elapsed_time(jit_infer_ender)
-            # res = res.cpu()
 
         # Original Python measurements
         infer_starter, infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)

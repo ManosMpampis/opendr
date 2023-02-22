@@ -31,7 +31,7 @@ LD =  -L/usr/lib/ -L/usr/local/lib/ -lstdc++ -lm -lonnxruntime `pkg-config --lib
 OPENDR_INC = -I$(OPENDR_HOME)/include
 OPENDR_LD = -L$(OPENDR_HOME)/lib -lopendr
 
-all: clean demos
+all: clean demos download
 
 demos: nanodet
 
@@ -40,18 +40,11 @@ nanodet_benchmark: $(BUILD_DIR)/object_detection_2d/nanodet_jit_benchmark
 nanodet: nanodet_demo nanodet_benchmark
 
 download:
-	@+if [ -a $(DATA_DIR) ] ; \
-    	then \
-    		echo Resources already downloaded. Run rm -rf $(DATA_DIR) to remove existing resources.; \
-    	else \
-    		echo Downloading resources for C API...; \
-    		$(MKDIR_P) $(DATA_DIR)/object_detection_2d/nanodet; \
-    		$(WGET) ftp://opendrdata.csd.auth.gr/perception/object_detection_2d/nanodet/images/*; \
-    		$(MV) opendrdata.csd.auth.gr/perception/object_detection_2d/nanodet/images  $(DATA_DIR)/object_detection_2d/nanodet/database; \
-    		$(RM) -r opendrdata.csd.auth.gr; \
-    	fi;
-
-
+	echo Downloading resources for C API...; \
+    $(MKDIR_P) $(DATA_DIR)/object_detection_2d/nanodet; \
+    $(WGET) ftp://opendrdata.csd.auth.gr/perception/object_detection_2d/nanodet/images/*; \
+    $(MV) opendrdata.csd.auth.gr/perception/object_detection_2d/nanodet/images  $(DATA_DIR)/object_detection_2d/nanodet/database; \
+    $(RM) -r opendrdata.csd.auth.gr; \
 
 $(BUILD_DIR)/object_detection_2d/nanodet_jit_demo:
 	$(MKDIR_P) $(BUILD_DIR)/object_detection_2d
