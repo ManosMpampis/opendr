@@ -29,7 +29,7 @@ model:
       octave_base_scale: 5
       scales_per_octave: 1
       strides: [4, 8] #Set of last pass of all layers in head from the coresponding layer
-      reg_max: 7
+      reg_max: 3
       norm_cfg:
         type: BN
       loss:
