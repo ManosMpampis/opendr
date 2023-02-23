@@ -26,6 +26,7 @@ model:
       scales_per_octave: 1
       strides: [8, 16, 32]
       reg_max: 7
+      fork: True
       norm_cfg:
         type: BN
       loss:

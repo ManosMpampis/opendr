@@ -113,6 +113,8 @@ class GFLHead(nn.Module):
         conv_cfg=None,
         norm_cfg=dict(type="GN", num_groups=32, requires_grad=True),
         reg_max=16,
+        ignore_iof_thr=-1,
+        fork=False,
         **kwargs
     ):
         super(GFLHead, self).__init__()
@@ -123,17 +125,19 @@ class GFLHead(nn.Module):
         self.grid_cell_scale = octave_base_scale
         self.strides = strides
         self.reg_max = reg_max
+        self.fork = fork
 
         self.loss_cfg = loss
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.use_sigmoid = self.loss_cfg.loss_qfl.use_sigmoid
+        self.ignore_iof_thr = ignore_iof_thr
         if self.use_sigmoid:
             self.cls_out_channels = num_classes
         else:
             self.cls_out_channels = num_classes + 1
 
-        self.assigner = ATSSAssigner(topk=9)
+        self.assigner = ATSSAssigner(topk=9, ignore_iof_thr=ignore_iof_thr)
         self.distribution_project = Integral(self.reg_max)
 
         self.loss_qfl = QualityFocalLoss(
@@ -194,6 +198,9 @@ class GFLHead(nn.Module):
         normal_init(self.gfl_reg, std=0.01)
 
     def forward(self, feats: List[Tensor]):
+        if self.fork:
+            return self.forward_fork(feats)
+
         outputs = []
         for idx, scale in enumerate(self.scales):
             cls_feat = feats[idx]
@@ -208,6 +215,32 @@ class GFLHead(nn.Module):
             outputs.append(output.flatten(start_dim=2))
         outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
         return outputs
+
+    @torch.jit.unused
+    def forward_fork(self, feats: List[Tensor]):
+        outputs = []
+        futures = []
+        for idx, scale in enumerate(self.scales):
+            future = torch.jit.fork(self.forward_each_input, feats, idx, scale)
+            futures.append(future)
+
+        for future in futures:
+            outputs.append(future.wait())
+
+        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
+        return outputs
+
+    def forward_each_input(self, feats, idx, scale):
+        cls_feat = feats[idx]
+        reg_feat = feats[idx]
+        for cls_conv in self.cls_convs:
+            cls_feat = cls_conv(cls_feat)
+        for reg_conv in self.reg_convs:
+            reg_feat = reg_conv(reg_feat)
+        cls_score = self.gfl_cls(cls_feat)
+        bbox_pred = scale(self.gfl_reg(reg_feat)).float()
+        output = torch.cat([cls_score, bbox_pred], dim=1)
+        return output.flatten(start_dim=2)
 
     def loss(self, preds, gt_meta):
         cls_scores, bbox_preds = preds.split(

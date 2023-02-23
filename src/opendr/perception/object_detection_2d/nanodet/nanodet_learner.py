@@ -287,6 +287,10 @@ class NanodetLearner(Learner):
             if not os.path.exists(path):
                 os.makedirs(path)
 
+            checkpoint_file = os.path.join(path, "nanodet_{}.ckpt".format(model))
+            if os.path.isfile(checkpoint_file):
+                return
+
             if verbose:
                 print("Downloading pretrained checkpoint...")
 
@@ -294,7 +298,7 @@ class NanodetLearner(Learner):
                                     "nanodet_{}".format(model),
                                     "nanodet_{}.ckpt".format(model))
 
-            urlretrieve(file_url, os.path.join(path, "nanodet_{}.ckpt".format(model)))
+            urlretrieve(file_url, checkpoint_file)
 
             if verbose:
                 print("Downloading pretrain weights if provided...")
@@ -302,7 +306,11 @@ class NanodetLearner(Learner):
             file_url = os.path.join(url, "pretrained", "nanodet_{}".format(model),
                                     "nanodet_{}.pth".format(model))
             try:
-                urlretrieve(file_url, os.path.join(path, "nanodet_{}.pth".format(model)))
+                pytorch_save_file = os.path.join(path, "nanodet_{}.pth".format(model))
+                if os.path.isfile(pytorch_save_file):
+                    return
+
+                urlretrieve(file_url, pytorch_save_file)
 
                 if verbose:
                     print("Making metadata...")
@@ -332,9 +340,12 @@ class NanodetLearner(Learner):
 
         elif mode == "images":
             file_url = os.path.join(url, "images", "000000000036.jpg")
+            image_file = os.path.join(path, "000000000036.jpg")
+            if os.path.isfile(image_file):
+                return
             if verbose:
                 print("Downloading example image...")
-            urlretrieve(file_url, os.path.join(path, "000000000036.jpg"))
+            urlretrieve(file_url, image_file)
 
         elif mode == "test_data":
             os.makedirs(os.path.join(path, "test_data"), exist_ok=True)
@@ -824,6 +835,8 @@ class NanodetLearner(Learner):
         :type nms_max_num: int
         """
 
+        # torch.backends.cudnn.enabled = True
+        # torch.backends.cudnn.benchmark = True
         import numpy as np
 
         dummy_input = self.__cv_dumy_input()

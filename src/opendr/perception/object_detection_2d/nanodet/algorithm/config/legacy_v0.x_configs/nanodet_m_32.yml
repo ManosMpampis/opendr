@@ -30,6 +30,7 @@ model:
       scales_per_octave: 1
       strides: [4, 8] #Set of last pass of all layers in head from the coresponding layer
       reg_max: 3
+      fork: True
       norm_cfg:
         type: BN
       loss:

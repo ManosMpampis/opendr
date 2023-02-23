@@ -19,8 +19,8 @@ from opendr.engine.data import Image
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="vgg_64")
-    parser.add_argument("--optimize-jit", help="", action="store_false")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m")#"vgg_64")
+    parser.add_argument("--optimize-jit", help="", action="store_false")#true")#false")
     parser.add_argument("--download", help="", action="store_true")
     parser.add_argument("--mix", help="", action="store_true")
     parser.add_argument("--optimize-onnx", help="", default=False, action="store_true")

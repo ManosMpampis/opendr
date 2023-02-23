@@ -16,35 +16,34 @@
 import torch
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.iou_loss import bbox_overlaps
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.assigner.assign_result import AssignResult
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.assigner.base_assigner import BaseAssigner
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.assigner.assign_result import\
+    AssignResult
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.assigner.base_assigner import\
+    BaseAssigner
 
 
 class ATSSAssigner(BaseAssigner):
     """Assign a corresponding gt bbox or background to each bbox.
-
-    Each proposals will be assigned with `0` or a positive integer
+    Each proposals will be assigned with `-1`, `0` or a positive integer
     indicating the ground truth index.
-
+    - -1: ignore sample, will be masked in loss calculation
     - 0: negative sample, no assigned gt
     - positive integer: positive sample, index (1-based) of assigned gt
-
     Args:
         topk (float): number of bbox selected in each level
+        ignore_iof_thr (float): whether ignore max overlaps or not.
+            Default -1 ([0,1] or -1).
     """
 
-    def __init__(self, topk):
+    def __init__(self, topk, ignore_iof_thr=-1):
         self.topk = topk
+        self.ignore_iof_thr = ignore_iof_thr
 
     # https://github.com/sfzhang15/ATSS/blob/master/atss_core/modeling/rpn/atss/loss.py
 
-    def assign(
-        self, bboxes, num_level_bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None
-    ):
+    def assign(self, bboxes, num_level_bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None):
         """Assign gt to bboxes.
-
         The assignment is done in following steps
-
         1. compute iou between all bbox (bbox of all pyramid levels) and gt
         2. compute center distance between all bbox and gt
         3. on each pyramid level, for each gt, select k bbox whose center
@@ -55,8 +54,6 @@ class ATSSAssigner(BaseAssigner):
         5. select these candidates whose iou are greater than or equal to
            the threshold as postive
         6. limit the positive sample's center in gt
-
-
         Args:
             bboxes (Tensor): Bounding boxes to be assigned, shape(n, 4).
             num_level_bboxes (List): num of bboxes in each level
@@ -64,7 +61,6 @@ class ATSSAssigner(BaseAssigner):
             gt_bboxes_ignore (Tensor, optional): Ground truth bboxes that are
                 labelled as `ignored`, e.g., crowd boxes in COCO.
             gt_labels (Tensor, optional): Label of gt_bboxes, shape (k, ).
-
         Returns:
             :obj:`AssignResult`: The assign result.
         """
@@ -104,6 +100,18 @@ class ATSSAssigner(BaseAssigner):
         distances = (
             (bboxes_points[:, None, :] - gt_points[None, :, :]).pow(2).sum(-1).sqrt()
         )
+
+        if (
+            self.ignore_iof_thr > 0
+            and gt_bboxes_ignore is not None
+            and gt_bboxes_ignore.numel() > 0
+            and bboxes.numel() > 0
+        ):
+            ignore_overlaps = bbox_overlaps(bboxes, gt_bboxes_ignore, mode="iof")
+            ignore_max_overlaps, _ = ignore_overlaps.max(dim=1)
+            ignore_idxs = ignore_max_overlaps > self.ignore_iof_thr
+            distances[ignore_idxs, :] = INF
+            assigned_gt_inds[ignore_idxs] = -1
 
         # Selecting candidates based on the center distance
         candidate_idxs = []
