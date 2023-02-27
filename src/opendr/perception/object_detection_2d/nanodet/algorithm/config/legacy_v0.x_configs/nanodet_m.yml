@@ -15,6 +15,7 @@ model:
       out_channels: 96
       start_level: 0
       num_outs: 3
+      fork: False
     head:
       name: NanoDetHead
       num_classes: 80

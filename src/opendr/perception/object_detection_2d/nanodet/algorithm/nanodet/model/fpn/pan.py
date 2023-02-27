@@ -51,6 +51,7 @@ class PAN(FPN):
             conv_cfg=None,
             norm_cfg=None,
             activation=None,
+            fork=False,
     ):
         super(PAN, self).__init__(
             in_channels,
@@ -61,6 +62,7 @@ class PAN(FPN):
             conv_cfg,
             norm_cfg,
             activation,
+            fork
         )
         self.init_weights()
 
@@ -68,6 +70,8 @@ class PAN(FPN):
     def forward(self, inputs: List[Tensor]):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)
+        if self.fork:
+            return self.forward_fork(inputs)
 
         # build laterals
         laterals = [
@@ -96,6 +100,45 @@ class PAN(FPN):
         # outs.extend([laterals[i] for i in range(1, used_backbone_levels)])
 
         return laterals
+
+    def forward_fork(self, inputs: List[Tensor]):
+        futures = [
+            torch.jit.fork(lateral_conv, (inputs[i + self.start_level]))
+            for i, lateral_conv in enumerate(self.lateral_convs)
+        ]
+
+        laterals = [
+            future.wait()
+            for future in futures
+        ]
+
+        # used_backbone_levels = len(laterals)
+        #
+        # futures = [
+        #     torch.jit.fork(self.interpolation, laterals[i - 1], laterals[i])
+        #     for i in range(used_backbone_levels - 1, 0, -1)
+        # ]
+        # laterals = [
+        #     future.wait()
+        #     for future in futures
+        # ]
+        # build top-down path
+        used_backbone_levels = len(laterals)
+        for i in range(used_backbone_levels - 1, 0, -1):
+            futures[i - 1] = torch.jit.fork(self.interpolation, laterals[i - 1], laterals[i])
+
+        for i in range(used_backbone_levels - 1, 0, -1):
+            laterals[i - 1] = futures[i - 1].wait()
+
+        # part 2
+        for i in range(0, used_backbone_levels - 1):
+            futures[i + 1] = torch.jit.fork(self.interpolation, laterals[i + 1], laterals[i], 0.5)
+
+        for i in range(0, used_backbone_levels - 1):
+            laterals[i + 1] = futures[i + 1].wait()
+
+        return laterals
+
 
     # @torch.jit.unused
     def old_forward(self, inputs: List[Tensor]):

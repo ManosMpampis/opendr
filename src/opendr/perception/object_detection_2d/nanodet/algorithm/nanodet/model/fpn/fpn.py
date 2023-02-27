@@ -49,6 +49,7 @@ class FPN(nn.Module):
         conv_cfg=None,
         norm_cfg=None,
         activation=None,
+        fork=False
     ):
         super(FPN, self).__init__()
         assert isinstance(in_channels, list)
@@ -56,6 +57,7 @@ class FPN(nn.Module):
         self.out_channels = out_channels
         self.num_ins = len(in_channels)
         self.num_outs = num_outs
+        self.fork = fork
         self.fp16_enabled = False
 
         if end_level == -1:
@@ -93,6 +95,8 @@ class FPN(nn.Module):
     @torch.jit.unused
     def forward(self, inputs: List[Tensor]):
         assert len(inputs) == len(self.in_channels)
+        if self.fork:
+            return self.forward_fork(inputs)
 
         # build laterals
         laterals = [
@@ -108,5 +112,34 @@ class FPN(nn.Module):
             )
 
         # build outputs
-        outs = [laterals[i] for i in range(used_backbone_levels)]
-        return outs
+        # outs = [laterals[i] for i in range(used_backbone_levels)]
+        # return outs
+        return laterals
+
+
+    def forward_fork(self, inputs: List[Tensor]):
+        # build laterals
+        futures = [
+            torch.jit.fork(lateral_conv, (inputs[i + self.start_level]))
+            for i, lateral_conv in enumerate(self.lateral_convs)
+        ]
+
+        laterals = [
+            future.wait()
+            for future in futures
+        ]
+
+        # build top-down path
+        used_backbone_levels = len(laterals)
+        for i in range(used_backbone_levels - 1, 0, -1):
+            futures[i - 1] = torch.jit.fork(self.interpolation, laterals[i - 1], laterals[i])
+
+        for i in range(used_backbone_levels - 1, 0, -1):
+            laterals[i - 1] = futures[i - 1].wait()
+
+        return laterals
+
+    @staticmethod
+    def interpolation(added_value, interpolation_value, scale_factor=2):
+        return (added_value + F.interpolate(
+            interpolation_value, scale_factor=scale_factor, mode="bilinear"))
