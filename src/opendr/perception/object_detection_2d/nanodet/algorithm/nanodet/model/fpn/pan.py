@@ -42,15 +42,15 @@ class PAN(FPN):
     """
 
     def __init__(
-        self,
-        in_channels,
-        out_channels,
-        num_outs,
-        start_level=0,
-        end_level=-1,
-        conv_cfg=None,
-        norm_cfg=None,
-        activation=None,
+            self,
+            in_channels,
+            out_channels,
+            num_outs,
+            start_level=0,
+            end_level=-1,
+            conv_cfg=None,
+            norm_cfg=None,
+            activation=None,
     ):
         super(PAN, self).__init__(
             in_channels,
@@ -66,6 +66,39 @@ class PAN(FPN):
 
     # @torch.jit.unused
     def forward(self, inputs: List[Tensor]):
+        """Forward function."""
+        assert len(inputs) == len(self.in_channels)
+
+        # build laterals
+        laterals = [
+            lateral_conv(inputs[i + self.start_level])
+            for i, lateral_conv in enumerate(self.lateral_convs)
+        ]
+
+        # build top-down path
+        used_backbone_levels = len(laterals)
+        for i in range(used_backbone_levels - 1, 0, -1):
+            laterals[i - 1] = laterals[i - 1] + F.interpolate(
+                laterals[i], scale_factor=2.0, mode="bilinear"
+            )
+
+        # # build outputs
+        # # part 1: from original levels
+
+
+        # part 2: add bottom-up path
+        for i in range(0, used_backbone_levels - 1):
+            laterals[i + 1] = laterals[i + 1] + F.interpolate(
+                laterals[i], scale_factor=0.5, mode="bilinear"
+            )
+
+        # outs = [laterals[0]]
+        # outs.extend([laterals[i] for i in range(1, used_backbone_levels)])
+
+        return laterals
+
+    # @torch.jit.unused
+    def old_forward(self, inputs: List[Tensor]):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)
 
