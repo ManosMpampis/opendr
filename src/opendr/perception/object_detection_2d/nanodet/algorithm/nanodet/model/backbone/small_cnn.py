@@ -21,7 +21,7 @@ class VggSmall(nn.Module):
         pretrain=True
     ):
         super(VggSmall, self).__init__()
-        assert set(out_stages).issubset((1, 2, 3, 4))
+        assert set(out_stages).issubset((1, 2, 3, 4, 5))
         self.activation = activation
         self.names = [f"{i}" for i in range(len(stages_inplanes))]
         if len(stages_outplanes) != len(stages_inplanes):
