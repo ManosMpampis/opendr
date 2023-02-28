@@ -528,21 +528,28 @@ class NanodetLearner(Learner):
                                        iou_thresh=iou_threshold, nms_max_num=nms_max_num)
 
         os.makedirs(jit_path, exist_ok=True)
-
+        os.makedirs(f"{jit_path}/trace", exist_ok=True)
         dummy_input = self.__dummy_input()
 
         with torch.no_grad():
             export_path = os.path.join(jit_path, "nanodet_{}.pth".format(self.cfg.check_point_name))
             self.predictor.trace_model(dummy_input)
-            model_traced = torch.jit.script(self.predictor)
+            model_scripted = torch.jit.script(self.predictor)
+            export_path_trace = os.path.join(jit_path, "trace", "nanodet_{}.pth".format(self.cfg.check_point_name))
+            model_traced = self.predictor.traced_model
 
             metadata = {"model_paths": ["nanodet_{}.pth".format(self.cfg.check_point_name)], "framework": "pytorch",
                         "format": "pth", "has_data": False, "optimized": True, "optimizer_info": {},
                         "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
                                              "conf_threshold": conf_threshold, "iou_threshold": iou_threshold}}
-            model_traced.save(export_path)
+            model_scripted.save(export_path)
 
             with open(os.path.join(jit_path, "nanodet_{}.json".format(self.cfg.check_point_name)),
+                      'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=4)
+
+            model_traced.save(export_path_trace)
+            with open(os.path.join(jit_path, "trace", "nanodet_{}.json".format(self.cfg.check_point_name)),
                       'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=4)
 
@@ -554,6 +561,12 @@ class NanodetLearner(Learner):
             print("Loading JIT model from {}.".format(jit_path))
 
         self.jit_model = torch.jit.load(jit_path, map_location=self.device)
+
+    def _load_only_jit(self, jit_path, verbose=True):
+        if verbose:
+            print("Loading JIT model from {}.".format(jit_path))
+
+        self.jit_only_model = torch.jit.load(jit_path, map_location=self.device)
 
     def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6,
                  nms_max_num=100):
@@ -591,6 +604,7 @@ class NanodetLearner(Learner):
             metadata = json.load(f)
         if optimization == "jit":
             self._load_jit(os.path.join(export_path, metadata["model_paths"][0]), verbose)
+            self._load_only_jit(os.path.join(export_path, "trace", metadata["model_paths"][0]), verbose)
         elif optimization == "onnx":
             self._load_onnx(os.path.join(export_path, metadata["model_paths"][0]), verbose)
         elif optimization == "trt":
@@ -876,6 +890,22 @@ class NanodetLearner(Learner):
             # Do not measure postprocessing because we will measure it in the actual run
             res = self.predictor.postprocessing(torch.from_numpy(preds[0]), _input, *metadata)
 
+        jit_2_infer_timings = None
+        # Jit measurements
+        if self.jit_only_model:
+            jit_2_infer_starter, jit_2_infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
+                enable_timing=True)
+            jit_2_infer_timings = np.zeros((repetitions, 1))
+
+            for run in range(warmup):
+                _ = self.jit_only_model(_input, *metadata)
+            for run in range(repetitions):
+                jit_2_infer_starter.record()
+                _ = self.jit_only_model(_input, *metadata)
+                jit_2_infer_ender.record()
+                torch.cuda.synchronize()
+                jit_2_infer_timings[run] = jit_2_infer_starter.elapsed_time(jit_2_infer_ender)
+
         jit_infer_timings = None
         # Jit measurements
         if self.jit_model:
@@ -920,13 +950,19 @@ class NanodetLearner(Learner):
         std_preprocess_timings = np.std(preprocess_timings)
         std_infer_timings = np.std(infer_timings)
         std_post_timings = np.std(post_timings)
+        print(f"\n\n++++++ STD OF TIMES ++++++")
         print(f"std pre: {std_preprocess_timings}")
         print(f"std infer: {std_infer_timings}")
         print(f"std post: {std_post_timings}")
 
+        if self.jit_only_model:
+            std_jit_2_infer_timings = np.std(jit_2_infer_timings)
+            print(f"std JIT infer: {std_jit_2_infer_timings}")
+
         if self.jit_model:
             std_jit_infer_timings = np.std(jit_infer_timings)
             print(f"std JIT infer+post: {std_jit_infer_timings}")
+
         if self.ort_session:
             std_onnx_infer_timings = np.std(onnx_infer_timings)
             print(f"std ONNX infer: {std_onnx_infer_timings}")
@@ -937,6 +973,8 @@ class NanodetLearner(Learner):
 
         if self.jit_model:
             mean_jit_infer_timings = np.mean(jit_infer_timings)
+        if self.jit_only_model:
+            mean_jit_2_infer_timings = np.mean(jit_2_infer_timings)
 
         if self.ort_session:
             mean_onnx_infer_timings = np.mean(onnx_infer_timings)
@@ -948,6 +986,8 @@ class NanodetLearner(Learner):
         fps_post_timings = 1000/mean_post_timings
         if self.jit_model:
             fps_jit_infer_timings = 1000/mean_jit_infer_timings
+        if self.jit_only_model:
+            fps_jit_2_infer_timings = 1000/mean_jit_2_infer_timings
 
         if self.ort_session:
             fps_onnx_infer_timings = 1000/mean_onnx_infer_timings
@@ -962,8 +1002,11 @@ class NanodetLearner(Learner):
               f"infer + postpr fps = {fps_ifer_post_timings} evn/s")
         if self.jit_model:
             print(f"\n\n=== JIT measurements === \n"
-                  f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
-                  f"infer + postpr fps = {fps_jit_infer_timings} evn/s")
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s")
+            if self.jit_only_model:
+                print(f"infer          fps = {fps_jit_2_infer_timings} evn/s")
+            print(f"infer + postpr fps = {fps_jit_infer_timings} evn/s")
+
         if self.ort_session:
             print(f"\n\n=== ONNX measurements === \n"
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
