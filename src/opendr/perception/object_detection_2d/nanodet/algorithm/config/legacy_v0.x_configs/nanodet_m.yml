@@ -27,7 +27,7 @@ model:
       scales_per_octave: 1
       strides: [8, 16, 32]
       reg_max: 7
-      fork: True
+      fork: False
       norm_cfg:
         type: BN
       loss:
@@ -60,7 +60,7 @@ data:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   val:
     input_size:  [320, 320] #[640, 640] #[w,h][1920, 1088][960, 544]
-    keep_ratio: True
+    keep_ratio: False #True #False
     pipeline:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
 device:
