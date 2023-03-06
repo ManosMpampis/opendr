@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     if args.optimize_jit:
         nanodet.optimize(f"./jit/nanodet_{args.model}", optimization="jit", verbose=False)
-        # nanodet.optimize(f"", optimization="trt", verbose=True)
+        nanodet.optimize(f"./trt/nanodet_{args.model}", optimization="trt", verbose=False)
     if args.optimize_onnx:
         nanodet.optimize(f"./onnx/nanodet_{args.model}", optimization="onnx", verbose=False)
 

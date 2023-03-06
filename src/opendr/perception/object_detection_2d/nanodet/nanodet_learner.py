@@ -23,6 +23,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from pytorch_lightning.callbacks import ProgressBar
 import torch_tensorrt as trt
+import tensorrt as trt
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.check_point import save_model_state
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch import build_model
@@ -37,6 +38,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import
     load_config,
     load_model_weight,
     mkdir,
+    common,
 )
 
 from opendr.engine.data import Image
@@ -450,64 +452,72 @@ class NanodetLearner(Learner):
 
     def _save_trt(self, trt_path, verbose=True, conf_thresh=0.35,
                    iou_thresh=0.6, nms_max_num=100, dataset=None):
+
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
                                        iou_thresh=iou_thresh, nms_max_num=nms_max_num)
 
-        # os.makedirs(trt_path, exist_ok=True)
+        os.makedirs(trt_path, exist_ok=True)
+        export_path = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.onnx")
 
         dummy_input = self.__dummy_input()
 
-        self.predictor.trace_model(dummy_input[0])
-        traced_model = self.predictor.traced_model
-        traced_model = torch.jit.optimize_for_inference(traced_model)
-        # model_scripted = torch.jit.script(self.predictor)
-        # jit_model = self.predictor.script_model(*dummy_input)
-
-        # enabled_precisions = {trt.dtype.float, trt.dtype.half, trt.dtype.int8}
-        enabled_precisions = {trt.dtype.half}
-
-        calibrator = None
-        if trt.dtype.int8 in enabled_precisions:
-            testing_dataset = build_dataset(self.cfg.data.val, dataset, self.cfg.class_names, "val")
-            testing_dataloader = torch.utils.data.DataLoader(
-                testing_dataset, batch_size=1, shuffle=False, num_workers=1
-            )
-            calibrator = trt.ptq.DataLoaderCalibrator(
-                testing_dataloader,
-                cache_file="./calibration.cache",
-                use_cache=False,
-                algo_type=trt.ptq.CalibrationAlgo.ENTROPY_CALIBRATION_2,
-                device=torch.device("cuda:0"),
-            )
-
-        # with trt.logging.debug():
-        self.trt_model = trt.compile(
-            traced_model, #self.predictor.model, #traced_model,
-            inputs=[dummy_input[0]],
-            enabled_precisions=enabled_precisions,
-            ir="default",
-            truncate_long_and_double=True,
-            calibrator=calibrator
+        torch.onnx.export(
+            self.predictor,
+            dummy_input[0],
+            export_path,
+            verbose=verbose,
+            keep_initializers_as_inputs=True,
+            do_constant_folding=False,
+            opset_version=11,
+            input_names=['data'],
+            output_names=['output'],
         )
 
-        # torch.jit.save(self.trt_model, os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.ts"))
-        metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.ts"], "framework": "pytorch",
+        TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+        builder = trt.Builder(TRT_LOGGER)
+
+        network = builder.create_network(common.EXPLICIT_BATCH)
+        config = builder.create_builder_config()
+        config.set_flag(trt.BuilderFlag.FP16)
+        parser = trt.OnnxParser(network, TRT_LOGGER)
+        config.max_workspace_size = common.GiB(1)
+        with open(export_path, "rb") as model:
+            if not parser.parse(model.read()):
+                print("ERROR: Failed to parse the ONNX file.")
+                for error in range(parser.num_errors):
+                    print(parser.get_error(error))
+                return None
+        engine = builder.build_engine(network, config)
+        with open(f'{trt_path}/nanodet_{self.cfg.check_point_name}.trt', 'wb') as f:
+            engine_serialized = engine.serialize()
+            b_engine_serialized = bytearray(engine_serialized)
+            f.write(b_engine_serialized)
+
+        metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.trt"], "framework": "pytorch",
                     "format": "tensorRT", "has_data": False, "optimized": True, "optimizer_info": {},
-                    "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes}}
+                    "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
+                                         "num_classes": len(self.classes), "reg_max": self.cfg.model.arch.head.reg_max,
+                                         "strides": self.cfg.model.arch.head.strides}}
 
-        # with open(os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.json"),
-        #           'w', encoding='utf-8') as f:
-        #     json.dump(metadata, f, ensure_ascii=False, indent=4)
+        with open(f'{trt_path}/nanodet_{self.cfg.check_point_name}.json', 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=4)
 
-        if verbose:
-            print("Finished exporting tensorRT model.")
+        return
 
     def _load_trt(self, trt_path, verbose=True):
         if verbose:
             print("Loading TensorRT runtime inference session from {}".format(trt_path))
 
+        TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+        runtime = trt.Runtime(TRT_LOGGER)
+        with open('./engine.trt', 'rb') as f:
+            engine_bytes = f.read()
+            engine = runtime.deserialize_cuda_engine(engine_bytes)
+            self.trt_model = common.trt_model(engine, self.cfg)
+
         # self.trt_model = torch.jit.load(trt_path, map_location=self.device)
+        return
 
     def _save_jit(self, jit_path, verbose=True, conf_threshold=0.35, iou_threshold=0.6,
                   nms_max_num=100):
@@ -543,18 +553,21 @@ class NanodetLearner(Learner):
 
             if verbose:
                 print("Finished export to TorchScript.")
+        return
 
     def _load_jit(self, jit_path, verbose=True):
         if verbose:
             print("Loading JIT model from {}.".format(jit_path))
 
         self.jit_model = torch.jit.load(jit_path, map_location=self.device)
+        return
 
     def _load_only_jit(self, jit_path, verbose=True):
         if verbose:
             print("Loading JIT model from {}.".format(jit_path))
 
         self.jit_only_model = torch.jit.load(jit_path, map_location=self.device)
+        return
 
     def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6,
                  nms_max_num=100, dataset=None):
@@ -576,19 +589,18 @@ class NanodetLearner(Learner):
         """
 
         optimization = optimization.lower()
-        # if not os.path.exists(export_path):
-        if optimization == "jit":
-            self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
-                           nms_max_num=nms_max_num)
-        elif optimization == "onnx":
-            self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                            nms_max_num=nms_max_num)
-        elif optimization == "trt":
-            self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                           nms_max_num=nms_max_num, dataset=dataset)
-            return
-        else:
-            assert NotImplementedError
+        if not os.path.exists(export_path):
+            if optimization == "jit":
+                self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+                               nms_max_num=nms_max_num)
+            elif optimization == "onnx":
+                self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
+                                nms_max_num=nms_max_num)
+            elif optimization == "trt":
+                self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
+                               nms_max_num=nms_max_num, dataset=dataset)
+            else:
+                assert NotImplementedError
         with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
             metadata = json.load(f)
         if optimization == "jit":
@@ -600,6 +612,7 @@ class NanodetLearner(Learner):
             self._load_trt(os.path.join(export_path, metadata["model_paths"][0]), verbose)
         else:
             assert NotImplementedError
+        return
 
     def fit(self, dataset, val_dataset=None, logging_path='', verbose=True, logging=False, seed=123, local_rank=1):
         """
@@ -698,6 +711,7 @@ class NanodetLearner(Learner):
         )
 
         trainer.fit(self.task, train_dataloader, val_dataloader)
+        return
 
     def eval(self, dataset, verbose=True, logging=False, local_rank=1):
         """
@@ -806,8 +820,8 @@ class NanodetLearner(Learner):
                     "To run in TensorRT please delete the self.jit_model like: detector.jit_model = None.")
             res = self.jit_model(_input, *metadata)
         elif self.trt_model:
-            preds = self.trt_model(_input)
-            res = self.predictor.postprocessing(preds, _input, *metadata)
+            preds = self.trt_model(_input.cpu().detach().numpy().ravel())
+            res = self.predictor.postprocessing(torch.from_numpy(preds), _input, *metadata)
         else:
             preds = self.predictor(_input, *metadata)
             res = self.predictor.postprocessing(preds, _input, *metadata)
@@ -927,10 +941,10 @@ class NanodetLearner(Learner):
             trt_infer_timings = np.zeros((repetitions, 1))
 
             for run in range(warmup):
-                _ = self.trt_model(_input)
+                _ = self.trt_model(_input.cpu().detach().numpy().ravel())
             for run in range(repetitions):
                 trt_infer_starter.record()
-                _ = self.trt_model(_input)
+                _ = self.trt_model(_input.cpu().detach().numpy().ravel())
                 trt_infer_ender.record()
                 torch.cuda.synchronize()
                 trt_infer_timings[run] = trt_infer_starter.elapsed_time(trt_infer_ender)
@@ -992,6 +1006,8 @@ class NanodetLearner(Learner):
             mean_jit_2_infer_timings = np.mean(jit_2_infer_timings)
         if self.jit_model:
             mean_jit_infer_timings = np.mean(jit_infer_timings)
+        if self.jit_model and self.jit_only_model:
+            mean_jit_preprocessing_timings = mean_jit_infer_timings - mean_jit_2_infer_timings
         if self.trt_model:
             mean_trt_infer_timings = np.mean(trt_infer_timings)
 
@@ -1008,9 +1024,12 @@ class NanodetLearner(Learner):
             fps_jit_2_infer_timings = 1000/mean_jit_2_infer_timings
         if self.jit_model:
             fps_jit_infer_timings = 1000/mean_jit_infer_timings
+        if self.jit_model and self.jit_only_model:
+            fps_jit_preprocessing_timings = 1000/mean_jit_preprocessing_timings
 
         if self.trt_model:
             fps_trt_infer_timings = 1000 / mean_trt_infer_timings
+            fps_onnx_infer_post_timings = 1000 / (mean_trt_infer_timings + mean_post_timings)
         if self.ort_session:
             fps_onnx_infer_timings = 1000/mean_onnx_infer_timings
             fps_onnx_infer_post_timings = 1000/(mean_onnx_infer_timings + mean_post_timings)
@@ -1027,12 +1046,14 @@ class NanodetLearner(Learner):
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s")
             if self.jit_only_model:
                 print(f"infer          fps = {fps_jit_2_infer_timings} evn/s")
+                print(f"postprocessing fps = {fps_jit_preprocessing_timings} evn/s")
             print(f"infer + postpr fps = {fps_jit_infer_timings} evn/s")
 
         if self.trt_model:
             print(f"\n\n=== TRT measurements === \n"
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s")
-            print(f"infer          fps = {fps_trt_infer_timings} evn/s")
+            print(f"infer          fps = {fps_trt_infer_timings} evn/s\n"
+                  f"infer + postpr fps = {fps_onnx_infer_post_timings} evn/s\n\n\n")
 
         if self.ort_session:
             print(f"\n\n=== ONNX measurements === \n"

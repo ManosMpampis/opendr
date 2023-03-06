@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument("--path", help="Path to the image that is used for inference", type=str,
                         default="./predefined_examples/000000000036.jpg")
     parser.add_argument("--optimize", help="If specified will determine the optimization to be used (onnx, jit)",
-                        type=str, default="trt", choices=["", "onnx", "jit", "trt"])
+                        type=str, default="", choices=["", "onnx", "jit", "trt"])
     parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.35)
     parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.6)
     parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=30)
@@ -40,10 +40,10 @@ if __name__ == '__main__':
     img = Image.open(args.path)
 
     if args.optimize != "":
-        if args.optimize == "trt":
-            data_root = ...
-            dataset = ExternalDataset(data_root, "coco")
-        nanodet.optimize("./{}/nanodet_{}".format(args.optimize, args.model), optimization=args.optimize)
+        # if args.optimize == "trt":
+        #     data_root = ...
+        #     dataset = ExternalDataset(data_root, "coco")
+        nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize)
 
     boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
                           nms_max_num=args.nms)
