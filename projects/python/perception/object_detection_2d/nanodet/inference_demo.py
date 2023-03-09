@@ -46,6 +46,6 @@ if __name__ == '__main__':
         nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize)
 
     boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
-                          nms_max_num=args.nms)
+                          nms_max_num=args.nms, mix=True)
 
     draw_bounding_boxes(img.opencv(), boxes, class_names=nanodet.classes, show=args.show)
