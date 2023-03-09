@@ -20,7 +20,7 @@ model:
       out_channels: 6 #4
       start_level: 0
       num_outs: 2
-      fork: Ture
+      fork: False
     head:
       name: NanoDetHead
       num_classes: 1
@@ -32,7 +32,7 @@ model:
       scales_per_octave: 1
       strides: [4, 8] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
       reg_max: 5
-      fork: True
+      fork: False
       norm_cfg:
         type: BN
       loss:
@@ -65,7 +65,7 @@ data:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   val:
     input_size: [1920, 1088] #[w,h]
-    keep_ratio: True
+    keep_ratio: False
     pipeline:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
 device:
