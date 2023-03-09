@@ -63,7 +63,11 @@ class CocoDetectionEvaluator:
         json_results = []
         for image_id, dets in results.items():
             for label, bboxes in dets.items():
-                category_id = self.cat_ids[label]
+                try:
+                    category_id = self.cat_ids[label]
+                except IndexError as e:
+                    warnings.warn(f"error: {e}!!! change config file for correct number of classes")
+                    os.sys.exit()
                 for bbox in bboxes:
                     score = float(bbox[4])
                     detection = dict(
