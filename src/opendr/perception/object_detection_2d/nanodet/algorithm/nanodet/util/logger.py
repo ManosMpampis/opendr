@@ -110,7 +110,7 @@ class AverageMeter(object):
 
 
 class NanoDetLightningLogger(LightningLoggerBase):
-    def __init__(self, save_dir="./", **kwargs):
+    def __init__(self, save_dir="./", verbose_only=False, **kwargs):
         super().__init__()
         self._name = "NanoDet"
         self._version = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
@@ -118,7 +118,8 @@ class NanoDetLightningLogger(LightningLoggerBase):
 
         self._fs = get_filesystem(save_dir)
         self._fs.makedirs(self.log_dir, exist_ok=True)
-        self._init_logger()
+        self._init_logger(verbose_only)
+        self.verbose_only = verbose_only
 
         self._experiment = None
         self._kwargs = kwargs
@@ -161,17 +162,20 @@ class NanoDetLightningLogger(LightningLoggerBase):
         return self._version
 
     @rank_zero_only
-    def _init_logger(self):
+    def _init_logger(self, verbose_only=False):
         self.logger = logging.getLogger(name=self.name)
         self.logger.setLevel(logging.INFO)
 
         # create file handler
-        fh = logging.FileHandler(os.path.join(self.log_dir, "logs.txt"))
-        fh.setLevel(logging.INFO)
-        # set file formatter
-        f_fmt = "[%(name)s][%(asctime)s]%(levelname)s: %(message)s"
-        file_formatter = logging.Formatter(f_fmt, datefmt="%m-%d %H:%M:%S")
-        fh.setFormatter(file_formatter)
+        if verbose_only is False:
+            fh = logging.FileHandler(os.path.join(self.log_dir, "logs.txt"))
+            fh.setLevel(logging.INFO)
+            # set file formatter
+            f_fmt = "[%(name)s][%(asctime)s]%(levelname)s: %(message)s"
+            file_formatter = logging.Formatter(f_fmt, datefmt="%m-%d %H:%M:%S")
+            fh.setFormatter(file_formatter)
+            # add the handlers to the logger
+            self.logger.addHandler(fh)
 
         # create console handler
         ch = logging.StreamHandler()
@@ -182,8 +186,8 @@ class NanoDetLightningLogger(LightningLoggerBase):
         ch.setFormatter(console_formatter)
 
         # add the handlers to the logger
-        self.logger.addHandler(fh)
         self.logger.addHandler(ch)
+        self.logger.propagate = False
 
     @rank_zero_only
     def info(self, string):
@@ -205,8 +209,9 @@ class NanoDetLightningLogger(LightningLoggerBase):
     @rank_zero_only
     def log_metrics(self, metrics, step):
         self.logger.info(f"Val_metrics: {metrics}")
-        for k, v in metrics.items():
-            self.experiment.add_scalars("Val_metrics/" + k, {"Val": v}, step)
+        if self.verbose_only is False:
+            for k, v in metrics.items():
+                self.experiment.add_scalars("Val_metrics/" + k, {"Val": v}, step)
 
     @rank_zero_only
     def save(self):
