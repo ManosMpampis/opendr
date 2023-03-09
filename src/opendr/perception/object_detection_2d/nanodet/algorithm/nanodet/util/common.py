@@ -209,7 +209,8 @@ class trt_model():
             out_feature_dim += size
         self.output_shape = (1, int(out_feature_dim), out_cls_reg_dim)
 
-    def __call__(self, input):
-        np.copyto(self.inputs[0].host, input)
+    # def __call__(self, input):
+    #     np.copyto(self.inputs[0].host, input)
+    def __call__(self):
         preds = do_inference_v2(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream)
         return preds[0].reshape(self.output_shape)
