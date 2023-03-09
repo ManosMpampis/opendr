@@ -313,7 +313,7 @@ class TrainingTask(LightningModule):
 
         """
         # if self.local_rank < 1:
-        if self.logger:
+        if self.logger.verbose_only is False:
             self.logger.experiment.add_scalars(tag, {phase: value}, step)
 
     def info(self, string):
