@@ -22,8 +22,11 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from pytorch_lightning.callbacks import ProgressBar
-import torch_tensorrt as trt
-import tensorrt as trt
+# import torch_tensorrt as trt
+try:
+    import tensorrt as trt
+except ImportError as e:
+    warnings.warn(f"{e}, No TensorRT is installed")
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.check_point import save_model_state
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch import build_model
@@ -54,6 +57,9 @@ _MODEL_NAMES = {"EfficientNet_Lite0_320", "EfficientNet_Lite1_416", "EfficientNe
                 "RepVGG_A0_416", "t", "g", "m", "m_416", "m_0.5x", "m_1.5x", "m_1.5x_416",
                 "plus_m_320", "plus_m_1.5x_320", "plus_m_416", "plus_m_1.5x_416", "m_32", "vgg_64", "custom"}
 
+
+torch.backends.cudnn.enabled = True
+torch.backends.cudnn.benchmark = True
 
 class NanodetLearner(Learner):
     def __init__(self, model_to_use="m", iters=None, lr=None, batch_size=None, checkpoint_after_iter=None,
@@ -90,6 +96,7 @@ class NanodetLearner(Learner):
 
         self.ort_session = None
         self.jit_model = None
+        self.jit_only_model = None
         self.trt_model = None
         self.predictor = None
 
@@ -377,7 +384,7 @@ class NanodetLearner(Learner):
     def __dummy_input(self):
         width, height = self.cfg.data.val.input_size
         dummy_input = (
-            torch.randn((3, width, height), device=self.device, dtype=torch.float32),
+            torch.randn((3, height, width), device=self.device, dtype=torch.float32),
             torch.tensor(width, device="cpu", dtype=torch.int64),
             torch.tensor(height, device="cpu", dtype=torch.int64),
             torch.eye(3, device="cpu", dtype=torch.float32),
@@ -389,10 +396,10 @@ class NanodetLearner(Learner):
         return torch.randn((width, height, 3), device="cpu", dtype=torch.float32).numpy()
 
     def _save_onnx(self, onnx_path, do_constant_folding=False, verbose=True, conf_thresh=0.35,
-                   iou_thresh=0.6, nms_max_num=100):
+                   iou_thresh=0.6, nms_max_num=100, mix=False):
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
-                                       iou_thresh=iou_thresh, nms_max_num=nms_max_num)
+                                       iou_thresh=iou_thresh, nms_max_num=nms_max_num, mix=mix)
 
         os.makedirs(onnx_path, exist_ok=True)
         export_path = os.path.join(onnx_path, "nanodet_{}.onnx".format(self.cfg.check_point_name))
@@ -511,7 +518,7 @@ class NanodetLearner(Learner):
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         runtime = trt.Runtime(TRT_LOGGER)
-        with open('./engine.trt', 'rb') as f:
+        with open(f'{trt_path}', 'rb') as f:
             engine_bytes = f.read()
             engine = runtime.deserialize_cuda_engine(engine_bytes)
             self.trt_model = common.trt_model(engine, self.cfg)
@@ -520,10 +527,10 @@ class NanodetLearner(Learner):
         return
 
     def _save_jit(self, jit_path, verbose=True, conf_threshold=0.35, iou_threshold=0.6,
-                  nms_max_num=100):
+                  nms_max_num=100, mix=False):
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, mix=mix)
 
         os.makedirs(jit_path, exist_ok=True)
         os.makedirs(f"{jit_path}/trace", exist_ok=True)
@@ -570,7 +577,7 @@ class NanodetLearner(Learner):
         return
 
     def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6,
-                 nms_max_num=100, dataset=None):
+                 nms_max_num=100, mix=False, dataset=None):
         """
         Method for optimizing the model with ONNX or JIT.
         :param export_path: The file path to the folder where the optimized model will be saved. If a model already
@@ -592,10 +599,10 @@ class NanodetLearner(Learner):
         if not os.path.exists(export_path):
             if optimization == "jit":
                 self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
-                               nms_max_num=nms_max_num)
+                               nms_max_num=nms_max_num, mix=mix)
             elif optimization == "onnx":
                 self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                                nms_max_num=nms_max_num)
+                                nms_max_num=nms_max_num, mix=mix)
             elif optimization == "trt":
                 self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
                                nms_max_num=nms_max_num, dataset=dataset)
@@ -639,18 +646,18 @@ class NanodetLearner(Learner):
         mkdir(local_rank, self.cfg.save_dir)
 
         if logging:
-            self.logger = NanoDetLightningLogger(self.temp_path + "/" + logging_path)
+            self.logger = NanoDetLightningLogger(save_dir=f"{self.temp_path}/{logging_path}", verbose_only=False)
             self.logger.dump_cfg(self.cfg)
+        elif verbose:
+            self.logger = NanoDetLightningLogger(save_dir="", verbose_only=verbose)
 
         if seed != '' or seed is not None:
-            if logging:
+            if self.logger:
                 self.logger.info("Set random seed to {}".format(seed))
             pl.seed_everything(seed)
 
-        if logging:
+        if self.logger:
             self.logger.info("Setting up data...")
-        elif verbose:
-            print("Setting up data...")
 
         train_dataset = build_dataset(self.cfg.data.val, dataset, self.cfg.class_names, "train")
         val_dataset = train_dataset if val_dataset is None else \
@@ -683,10 +690,8 @@ class NanodetLearner(Learner):
             if self.checkpoint_load_iter > 0 else None
         )
 
-        if logging:
+        if self.logger:
             self.logger.info("Creating task...")
-        elif verbose:
-            print("Creating task...")
         self.task = TrainingTask(self.cfg, self.model, evaluator)
 
         gpu_ids = None
@@ -782,7 +787,7 @@ class NanodetLearner(Learner):
         test_results = (verbose or logging)
         return trainer.test(self.task, val_dataloader, verbose=test_results)
 
-    def infer(self, input, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100):
+    def infer(self, input, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, mix=False):
         """
         Performs inference
         :param input: input image to perform inference on
@@ -798,7 +803,7 @@ class NanodetLearner(Learner):
         """
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, mix=mix)
 
         if not isinstance(input, Image):
             input = Image(input)
@@ -852,15 +857,13 @@ class NanodetLearner(Learner):
         :type nms_max_num: int
         """
 
-        # torch.backends.cudnn.enabled = True
-        # torch.backends.cudnn.benchmark = True
         import numpy as np
 
         dummy_input = self.__cv_dumy_input()
 
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, mix=mix)
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
 
         # Preprocess measurement
         preprocess_starter, preprocess_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
@@ -891,7 +894,7 @@ class NanodetLearner(Learner):
                 torch.cuda.synchronize()
                 onnx_infer_timings[run] = onnx_infer_starter.elapsed_time(onnx_infer_ender)
             # Do not measure postprocessing because we will measure it in the actual run
-            res = self.predictor.postprocessing(torch.from_numpy(preds[0]), _input, *metadata)
+            _ = self.predictor.postprocessing(torch.from_numpy(preds[0]), _input, *metadata)
 
         jit_2_infer_timings = None
         # Jit measurements
@@ -940,11 +943,13 @@ class NanodetLearner(Learner):
                 enable_timing=True)
             trt_infer_timings = np.zeros((repetitions, 1))
 
+            # self.predictor.model.to("cpu")
+            np.copyto(self.trt_model.inputs[0].host, _input.cpu().detach().numpy().ravel())
             for run in range(warmup):
-                _ = self.trt_model(_input.cpu().detach().numpy().ravel())
+                _ = self.trt_model()#(_input.cpu().detach().numpy().ravel())
             for run in range(repetitions):
                 trt_infer_starter.record()
-                _ = self.trt_model(_input.cpu().detach().numpy().ravel())
+                _ = self.trt_model()#(_input.cpu().detach().numpy().ravel())
                 trt_infer_ender.record()
                 torch.cuda.synchronize()
                 trt_infer_timings[run] = trt_infer_starter.elapsed_time(trt_infer_ender)
@@ -952,14 +957,28 @@ class NanodetLearner(Learner):
         # Original Python measurements
         infer_starter, infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         infer_timings = np.zeros((repetitions, 1))
-        for run in range(warmup):
-            _ = self.predictor(_input, *metadata)
-        for run in range(repetitions):
-            infer_starter.record()
-            preds = self.predictor(_input, *metadata)
-            infer_ender.record()
-            torch.cuda.synchronize()
-            infer_timings[run] = infer_starter.elapsed_time(infer_ender)
+        if mix:
+            try:
+                with torch.cuda.amp.autocast():
+                    for run in range(warmup):
+                        _ = self.predictor(_input, *metadata)
+                    for run in range(repetitions):
+                        infer_starter.record()
+                        preds = self.predictor(_input, *metadata)
+                        infer_ender.record()
+                        torch.cuda.synchronize()
+                        infer_timings[run] = infer_starter.elapsed_time(infer_ender)
+            except:
+                _input = _input.half
+                self.predictor.model = self.predictor.model.half
+                for run in range(warmup):
+                    _ = self.predictor(_input, *metadata)
+                for run in range(repetitions):
+                    infer_starter.record()
+                    preds = self.predictor(_input, *metadata)
+                    infer_ender.record()
+                    torch.cuda.synchronize()
+                    infer_timings[run] = infer_starter.elapsed_time(infer_ender)
 
         # Post-processing measurements
         post_starter, post_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
