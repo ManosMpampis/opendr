@@ -66,10 +66,11 @@ class Predictor(nn.Module):
         # cv2 is needed, and it is installed with abi cxx11 but torch is in cxx<11
         meta = {"img": img}
         meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
-        # cv2.imshow("temp", meta["img"].cpu().squeeze(0).permute(1,2,0).numpy())
-        # cv2.waitKey(0)
         if self.mix:
-            with torch.cuda.amp.autocast():
+            try:
+                with torch.cuda.amp.autocast():
+                    results = self.model.inference(meta)
+            except:
                 results = self.model.inference(meta)
         else:
             results = self.model.inference(meta)
