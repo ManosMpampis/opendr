@@ -19,7 +19,7 @@ from opendr.perception.object_detection_2d.datasets import XMLBasedDataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m") # "temp" "m" "plus_m_320"
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
     parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=1)
     parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.01)
@@ -46,11 +46,15 @@ if __name__ == '__main__':
     val_dataset = XMLBasedDataset(root=f'{data_root}/1image', dataset_type=dataset_type, images_dir='images',
                                   annotations_dir='annotations', classes=classes)
 
-    nanodet = NanodetLearner(model_to_use=args.model, iters=args.n_epochs, lr=args.lr, batch_size=args.batch_size,
-                             checkpoint_after_iter=args.checkpoint_freq, checkpoint_load_iter=args.resume_from,
-                             device=args.device)
+    # nanodet = NanodetLearner(model_to_use=args.model, iters=args.n_epochs, lr=args.lr, batch_size=args.batch_size,
+    #                          checkpoint_after_iter=args.checkpoint_freq, checkpoint_load_iter=args.resume_from,
+    #                          device=args.device)
 
-    nanodet.download("./predefined_examples", mode="pretrained")
-    nanodet.load(f"./predefined_examples/nanodet_{args.model}", verbose=True)
+    nanodet = NanodetLearner(model_to_use=args.model, iters=None, lr=None, batch_size=1,
+                             checkpoint_after_iter=1, checkpoint_load_iter=0,
+                             device="cuda")
+
+    # nanodet.download("./predefined_examples", mode="pretrained")
+    # nanodet.load(f"./predefined_examples/nanodet_{args.model}", verbose=True)
     nanodet.fit(dataset, val_dataset, logging=True)
     nanodet.save(f"./saved/nanodet_{args.model}")

@@ -1,0 +1,43 @@
+# Copyright 2020-2023 OpenDR European Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import argparse
+from opendr.perception.object_detection_2d import NanodetLearner
+from opendr.engine.data import Image
+from opendr.perception.object_detection_2d import draw_bounding_boxes
+from opendr.engine.datasets import ExternalDataset
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m") # "vgg_64" "plus_m_320")
+    parser.add_argument("--optimize", help="If specified will determine the optimization to be used (onnx, jit)",
+                        type=str, default="", choices=["", "onnx", "jit", "trt"])
+    parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.0001)
+    parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.6)
+    parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=4)
+    parser.add_argument("--show", help="do not show image", action="store_false")
+    args = parser.parse_args()
+
+    nanodet = NanodetLearner(model_to_use=args.model, device="cuda")
+    nanodet.load("./saved/nanodet_{}".format(args.model), verbose=True)
+
+    img = Image.open("/media/manos/hdd/Binary_Datasets/Football/96x96_1pos_9neg/1image/images/NEW00000.bmp")
+
+    if args.optimize != "":
+        nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize)
+
+    boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
+                          nms_max_num=args.nms, mix=False)
+
+    draw_bounding_boxes(img.opencv(), boxes, class_names=nanodet.classes, show=args.show)
