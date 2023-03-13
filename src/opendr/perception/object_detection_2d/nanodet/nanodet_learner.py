@@ -22,7 +22,7 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from pytorch_lightning.callbacks import ProgressBar
-# import torch_tensorrt as trt
+
 try:
     import tensorrt as trt
 except ImportError as e:
@@ -55,7 +55,7 @@ import onnxruntime as ort
 
 _MODEL_NAMES = {"EfficientNet_Lite0_320", "EfficientNet_Lite1_416", "EfficientNet_Lite2_512",
                 "RepVGG_A0_416", "t", "g", "m", "m_416", "m_0.5x", "m_1.5x", "m_1.5x_416",
-                "plus_m_320", "plus_m_1.5x_320", "plus_m_416", "plus_m_1.5x_416", "m_32", "vgg_64", "custom"}
+                "plus_m_320", "plus_m_1.5x_320", "plus_m_416", "plus_m_1.5x_416", "m_32", "vgg_64", "custom", "temp"}
 
 
 torch.backends.cudnn.enabled = True
