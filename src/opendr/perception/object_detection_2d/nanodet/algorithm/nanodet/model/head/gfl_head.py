@@ -18,7 +18,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transform.warp import warp_boxes,\
     scriptable_warp_boxes
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.gfocal_loss\
-    import DistributionFocalLoss, QualityFocalLoss
+    import DistributionFocalLoss, QualityFocalLoss, CrossEntropyLoss, HingeLoss
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.iou_loss import GIoULoss, bbox_overlaps
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import ConvModule
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.init_weights import normal_init
@@ -246,6 +246,7 @@ class GFLHead(nn.Module):
         cls_scores, bbox_preds = preds.split(
             [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
         )
+        # same as get_bboxes
         device = cls_scores.device
         gt_bboxes = gt_meta["gt_bboxes"]
         gt_labels = gt_meta["gt_labels"]
@@ -436,7 +437,7 @@ class GFLHead(nn.Module):
         # pixel cell number of multi-level feature maps
         num_level_cells = [grid_cells.size(0) for grid_cells in mlvl_grid_cells_list[0]]
         num_level_cells_list = [num_level_cells] * batch_size
-        # concat all level cells and to a single tensor
+        # concat all level cells to a single tensor
         for i in range(batch_size):
             mlvl_grid_cells_list[i] = torch.cat(mlvl_grid_cells_list[i])
         # compute targets for each image
