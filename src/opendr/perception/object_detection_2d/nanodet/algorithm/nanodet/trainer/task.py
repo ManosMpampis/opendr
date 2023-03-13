@@ -94,14 +94,13 @@ class TrainingTask(LightningModule):
                 batch_idx,
                 lr,
             )
-            self.scalar_summary("Train_loss/lr", "Train", lr, self.global_step)
+            self.scalar_summary("Learning Rate", lr, self.global_step)
             for loss_name in loss_states:
                 log_msg += "{}:{:.4f}| ".format(
                     loss_name, loss_states[loss_name].mean().item()
                 )
                 self.scalar_summary(
                     "Train_loss/" + loss_name,
-                    "Train",
                     loss_states[loss_name].mean().item(),
                     self.global_step,
                 )
@@ -302,19 +301,18 @@ class TrainingTask(LightningModule):
         items.pop("loss", None)
         return items
 
-    def scalar_summary(self, tag, phase, value, step):
+    def scalar_summary(self, tag, value, step):
         """
         Write Tensorboard scalar summary log.
         Args:
             tag: Name for the tag
-            phase: 'Train' or 'Val'
             value: Value to record
             step: Step value to record
 
         """
         # if self.local_rank < 1:
         if self.logger.verbose_only is False:
-            self.logger.experiment.add_scalars(tag, {phase: value}, step)
+            self.logger.experiment.add_scalar(tag, value, global_step=step)
 
     def info(self, string):
         if self.logger:

@@ -211,7 +211,7 @@ class NanoDetLightningLogger(LightningLoggerBase):
         self.logger.info(f"Val_metrics: {metrics}")
         if self.verbose_only is False:
             for k, v in metrics.items():
-                self.experiment.add_scalars("Val_metrics/" + k, {"Val": v}, step)
+                self.experiment.add_scalar("Val_metrics/" + k, v, step)
 
     @rank_zero_only
     def save(self):
