@@ -106,6 +106,7 @@ class TrainingTask(LightningModule):
                 )
             if self.logger:
                 self.logger.info(log_msg)
+                self.text_summary("Train_Epoch", log_msg, self.global_step % 20)
 
         return loss
 
@@ -143,8 +144,15 @@ class TrainingTask(LightningModule):
                 log_msg += "{}:{:.4f}| ".format(
                     loss_name, loss_states[loss_name].mean().item()
                 )
+
+                self.scalar_summary(
+                    "Val_loss/" + loss_name,
+                    loss_states[loss_name].mean().item(),
+                    self.global_step,
+                )
             if self.logger:
                 self.logger.info(log_msg)
+                self.text_summary("Val_Epoch", log_msg, self.global_step % 20)
 
         dets = self.model.head.post_process(preds, batch, "eval")
         return dets
@@ -300,6 +308,17 @@ class TrainingTask(LightningModule):
         items.pop("v_num", None)
         items.pop("loss", None)
         return items
+
+    def text_summary(self, tag, text, step):
+        """
+            Write Tensorboard text log.
+            Args:
+                tag: Name for the tag
+                text: Text to record
+                step: Step value to record
+        """
+        if self.logger.verbose_only is False:
+            self.logger.experiment.add_text(tag, text, global_step=step)
 
     def scalar_summary(self, tag, value, step):
         """
