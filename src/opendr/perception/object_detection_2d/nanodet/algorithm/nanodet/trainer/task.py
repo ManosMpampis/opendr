@@ -106,7 +106,7 @@ class TrainingTask(LightningModule):
                 )
             if self.logger:
                 self.logger.info(log_msg)
-                self.text_summary("Train_Epoch", log_msg, self.global_step % 20)
+                # self.text_summary("Train_Epoch", log_msg, self.global_step % 20)
 
         return loss
 
@@ -152,7 +152,7 @@ class TrainingTask(LightningModule):
                 )
             if self.logger:
                 self.logger.info(log_msg)
-                self.text_summary("Val_Epoch", log_msg, self.global_step % 20)
+                # self.text_summary("Val_Epoch", log_msg, self.global_step % 20)
 
         dets = self.model.head.post_process(preds, batch, "eval")
         return dets
