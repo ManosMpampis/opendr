@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     nanodet = NanodetLearner(model_to_use=args.model, iters=None, lr=None, batch_size=1,
                              checkpoint_after_iter=1, checkpoint_load_iter=0,
-                             device="cuda")
+                             device="cuda", model_log_name=f"{args.model}")
 
     # nanodet.download("./predefined_examples", mode="pretrained")
     # nanodet.load(f"./predefined_examples/nanodet_{args.model}", verbose=True)

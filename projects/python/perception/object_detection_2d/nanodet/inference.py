@@ -25,7 +25,7 @@ if __name__ == '__main__':
                         type=str, default="", choices=["", "onnx", "jit", "trt"])
     parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.0001)
     parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.6)
-    parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=4)
+    parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=5)
     parser.add_argument("--show", help="do not show image", action="store_false")
     args = parser.parse_args()
 
