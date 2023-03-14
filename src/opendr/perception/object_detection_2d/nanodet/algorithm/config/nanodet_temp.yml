@@ -1,37 +1,33 @@
 #Config File example
-save_dir: ./temp/nanodet_vgg_64
-check_point_name: vgg_64
+save_dir: ./temp/nanodet_m
+check_point_name: m
 model:
   arch:
     name: OneStageDetector
     backbone:
-      name: SmallVgg
-      out_stages: [3, 5] #[1, 2] #[2, 4]
-      stages_inplanes: [3, 8, 8, 8, 6] #[3, 8] #[3, 8, 8, 6]
-      stages_outplanes: [8, 8, 8, 6, 6] #[8, 8] #[8, 8, 6, 6]
-      stages_strides: [1, 2, 2, 1, 2] #[2,2] #[1, 2, 1, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
-      maxpool_after: [0, 0, 0, 0, 0] #[0,0] #[0, 0, 0, 0]
-      maxpool_stride: 1
-      activation: ReLU #LeakyReLU
-      pretrain: True
+      name: ShuffleNetV2
+      model_size: 1.0x
+      out_stages: [2,3,4]
+      activation: LeakyReLU
     fpn:
-      name: PAN #FPN  #PAN a litle slower than FPN
-      in_channels: [8, 6] #[8, 8] #[8, 6]
-      out_channels: 6 #4
+      name: PAN
+      in_channels: [116, 232, 464]
+      out_channels: 96
       start_level: 0
-      num_outs: 2
+      num_outs: 3
       fork: False
     head:
       name: NanoDetHead
       num_classes: 1
-      input_channel: 6 #4 #Out channel of fpn
-      feat_channels: 3
-      stacked_convs: 1 #Its pass in head have so many conv in list
+      input_channel: 96
+      feat_channels: 96
+      stacked_convs: 2
       share_cls_reg: True
-      octave_base_scale: 5
+      octave_base_scale: 1 #seen field
       scales_per_octave: 1
-      strides: [4, 8] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
-      reg_max: 5
+      strides: [8, 16, 32]
+      reg_max: 3
+      conv_type: Conv
       fork: False
       norm_cfg:
         type: BN
@@ -46,13 +42,13 @@ model:
           loss_weight: 0.25
         loss_bbox:
           name: GIoULoss
-          loss_weight: 2.0
+          loss_weight: 1.0
 data:
   train:
-    input_size: [96, 96] #[w,h]
-    keep_ratio: False
+    input_size: [92,92] #[w,h]
+    keep_ratio: False #True
     pipeline:
-      perspective: 0.0
+#      perspective: 0.0
 #      scale: [0.6, 1.4]
 #      stretch: [[1, 1], [1, 1]]
 #      rotation: 0
@@ -63,14 +59,11 @@ data:
 #      contrast: [0.6, 1.4]
 #      saturation: [0.5, 1.2]
       normalize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
-#      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   val:
-    input_size: [96, 96] #[1920, 1088] #[w,h]
-    keep_ratio: False
+    input_size:  [92,92] #[640, 640] #[w,h][1920, 1088][960, 544]
+    keep_ratio: False #True #False
     pipeline:
-      perspective: 0.0
       normalize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
-#      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
 device:
   gpu_ids: [0]
   workers_per_gpu: 8
@@ -78,19 +71,18 @@ device:
 schedule:
   resume: 0
   optimizer:
-    name: SGD
-    lr: 0.14
-    momentum: 0.9
-    weight_decay: 0.0001
+    name: AdamW
+    lr: 0.0001
+    weight_decay: 0.05
   warmup:
     name: linear
-    steps: 300
-    ratio: 0.1
-  total_epochs: 280
+    steps: 10
+    ratio: 0.0001
+  total_epochs: 1000
   lr_schedule:
-    name: MultiStepLR
-    milestones: [240,260,275]
-    gamma: 0.1
+    name: CosineAnnealingLR
+    T_max: 300
+    eta_min: 0.00005
   val_intervals: 10
 evaluator:
   name: CocoDetectionEvaluator
@@ -98,8 +90,7 @@ evaluator:
 log:
   interval: 1
 
-class_names: ['person']
-
+class_names: ['player']
 #class_names: ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
 #              'train', 'truck', 'boat', 'traffic_light', 'fire_hydrant',
 #              'stop_sign', 'parking_meter', 'bench', 'bird', 'cat', 'dog',
