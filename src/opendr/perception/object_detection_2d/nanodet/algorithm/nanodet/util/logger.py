@@ -201,6 +201,45 @@ class NanoDetLightningLogger(LightningLoggerBase):
     def dump_cfg(self, cfg_node):
         with open(os.path.join(self.log_dir, "train_cfg.yml"), "w") as f:
             cfg_node.dump(stream=f)
+        if self.verbose_only is False:
+            text = cfg_node.dump()
+            for _ in range(10):
+                text = text.replace(" -", "-")
+            text = text.replace(":\n-", ":[")
+            for i in range(10):
+                text = text.replace(f"\n- {i}", f", {i}")
+            text = text.replace("\n--", "], [")
+            text = text.replace("-", "[")
+            for i in range(10):
+                text = text.replace(f"{i}\n", f"{i}]\n")
+            text = text.replace("\n", "\n\t  ")
+            self.experiment.add_text("config", f"\t{text}")
+        return
+    #         dict_cfg = cfg_node.convert_to_dict(cfg_node, [])
+    #         text = self.pretty_json(dict_cfg)
+    #         for i in range(10):
+    #             text = text.replace(f" ]", f"]")
+    #         for i in range(10):
+    #             text = text.replace(f"\n\t]", f"]")
+    #         for _ in range(20):
+    #             for i in range(10):
+    #                 text = text.replace(f" {i}", f"{i}")
+    #         for i in range(10):
+    #             text = text.replace(f"\n\t{i}", f"{i}")
+    #         text = text.replace('"', '')
+    #         text = text.replace("{\n\t  save_dir", "save_dir")
+    #         text = text.replace("{", "")
+    #         for _ in range(20):
+    #             text = text.replace(" }", "}")
+    #         text = text.replace("\n\t},", "")
+    #         text = text.replace("},", "")
+    #         text = text.replace("\n\t}", "")
+    #         self.experiment.add_text("config", text)
+    #
+    # def pretty_json(self, hp):
+    #     import json
+    #     json_hp = json.dumps(hp, indent=2)
+    #     return "".join("\t" + line for line in json_hp.splitlines(True))
 
     @rank_zero_only
     def log_hyperparams(self, params):
