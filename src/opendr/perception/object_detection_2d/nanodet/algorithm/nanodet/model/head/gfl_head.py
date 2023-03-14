@@ -17,9 +17,12 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transform.warp import warp_boxes,\
     scriptable_warp_boxes
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.gfocal_loss\
-    import DistributionFocalLoss, QualityFocalLoss, CrossEntropyLoss, HingeLoss
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.iou_loss import GIoULoss, bbox_overlaps
+# from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.gfocal_loss\
+#     import DistributionFocalLoss, QualityFocalLoss, CrossEntropyLoss, HingeLoss
+# from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.iou_loss import GIoULoss, bbox_overlaps
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss import DistributionFocalLoss,\
+    QualityFocalLoss, CrossEntropyLoss, HingeLoss, GIoULoss
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.iou_loss import bbox_overlaps
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import ConvModule
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.init_weights import normal_init
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.nms import multiclass_nms
