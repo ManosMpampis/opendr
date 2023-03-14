@@ -157,7 +157,7 @@ class DepthwiseConvModule(nn.Module):
         norm_cfg=dict(type="BN"),
         activation="ReLU",
         inplace=True,
-        order=("depthwise", "dwnorm", "act", "pointwise", "pwnorm", "act"),
+        order=("depthwise", "dwnorm", "act", "pointwise", "pwnorm", "act"),  # ("depthwise", "act", "pointwise", "act"), #("depthwise", "dwnorm", "act", "pointwise", "pwnorm", "act"),
     ):
         super(DepthwiseConvModule, self).__init__()
         assert activation is None or isinstance(activation, str)
@@ -174,7 +174,7 @@ class DepthwiseConvModule(nn.Module):
             "act",
         }
 
-        self.with_norm = norm_cfg is not None
+        self.with_norm = norm_cfg['type'] != "None"
         # if the conv layer is before a norm layer, bias is unnecessary.
         if bias == "auto":
             bias = False if self.with_norm else True
