@@ -105,7 +105,10 @@ class NanodetLearner(Learner):
         self.logger = None
         self.task = None
         if model_log_name is not None:
-            writer = SummaryWriter(f'models/{model_log_name}')
+            # if os.path.exists(f'./models/{model_log_name}'):
+            #     import shutil
+            #     shutil.rmtree(f'./models/{model_log_name}')
+            writer = SummaryWriter(f'./models/{model_log_name}')
             writer.add_graph(self.model.eval(), self.__dummy_input()[0].to("cpu").unsqueeze(0))
             writer.close()
 
