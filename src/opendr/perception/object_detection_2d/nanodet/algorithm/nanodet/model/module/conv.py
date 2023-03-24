@@ -115,7 +115,7 @@ class ConvModule(nn.Module):
         # Use msra init by default
         self.init_weights()
 
-    # @torch.jit.unused
+    @torch.jit.unused
     @property
     def norm(self):
         if self.norm_name is not None:
@@ -132,7 +132,7 @@ class ConvModule(nn.Module):
         if self.with_norm:
             constant_init(self.norm, 1, bias=0)
 
-    # @torch.jit.unused
+    @torch.jit.unused
     def forward(self, x, norm: bool = True):
         for layer in self.order:
             if layer == "conv":

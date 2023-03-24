@@ -39,8 +39,8 @@ class NanoDetPlusHead(nn.Module):
         kernel_size (int): Size of the convolving kernel. Default: 5.
         strides (list[int]): Strides of input multi-level feature maps.
             Default: [8, 16, 32].
-        conv_type (str): Type of the convolution.
-            Default: "DWConv".
+        use_depthwise (bool): Whether to depthwise separable convolution in
+            blocks. Default: True
         norm_cfg (dict): Dictionary to construct and config norm layer.
             Default: dict(type='BN').
         reg_max (int): The maximal value of the discrete set. Default: 7.
@@ -57,14 +57,16 @@ class NanoDetPlusHead(nn.Module):
         stacked_convs=2,
         kernel_size=5,
         strides=[8, 16, 32],
-        conv_type="DWConv",
+        use_depthwise=True,
         norm_cfg=dict(type="BN"),
         reg_max=7,
         activation="LeakyReLU",
         assigner_cfg=dict(topk=13),
+        fork=False,
         **kwargs
     ):
         super(NanoDetPlusHead, self).__init__()
+        self.fork = fork
         self.num_classes = num_classes
         self.in_channels = input_channel
         self.feat_channels = feat_channels
@@ -73,7 +75,7 @@ class NanoDetPlusHead(nn.Module):
         self.strides = strides
         self.reg_max = reg_max
         self.activation = activation
-        self.ConvModule = ConvModule if conv_type == "Conv" else DepthwiseConvModule
+        self.ConvModule = DepthwiseConvModule if use_depthwise else ConvModule
 
         self.loss_cfg = loss
         self.norm_cfg = norm_cfg
@@ -138,7 +140,10 @@ class NanoDetPlusHead(nn.Module):
             normal_init(self.gfl_cls[i], std=0.01, bias=bias_cls)
         print("Finish initialize NanoDet-Plus Head.")
 
+    @torch.jit.unused
     def forward(self, feats: List[Tensor]):
+        if self.fork:
+            return self.forward_fork(feats)
         outputs = []
         for idx, (cls_convs, gfl_cls) in enumerate(zip(self.cls_convs, self.gfl_cls)):
             feat = feats[idx]
@@ -538,7 +543,10 @@ class NanoDetPlusHead(nn.Module):
         h, w = featmap_size
         x_range = (torch.arange(w, dtype=dtype, device=device)) * stride
         y_range = (torch.arange(h, dtype=dtype, device=device)) * stride
-        y, x = torch.meshgrid(y_range, x_range, indexing="ij")
+        if torch.jit.is_scripting() or not torch.__version__[:4] == "1.13":
+            y, x = torch.meshgrid(y_range, x_range)
+        else:
+            y, x = torch.meshgrid(y_range, x_range, indexing="ij")
         if flatten:
             y = y.flatten()
             x = x.flatten()
