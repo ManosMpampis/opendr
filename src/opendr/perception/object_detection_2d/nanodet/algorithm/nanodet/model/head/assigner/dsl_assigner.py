@@ -97,6 +97,10 @@ class DynamicSoftLabelAssigner(BaseAssigner):
             valid_pred_scores, soft_label, reduction="none"
         ) * scale_factor.abs().pow(2.0)
 
+        # cls_cost = F.hinge_embedding_loss(
+        #     valid_pred_scores, soft_label, reduction="none"
+        # ) * scale_factor.abs().pow(2.0)
+
         cls_cost = cls_cost.sum(dim=-1)
 
         cost_matrix = cls_cost + iou_cost * self.iou_factor
