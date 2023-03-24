@@ -1,0 +1,100 @@
+#Config File example
+save_dir: ./temp/nanodet_vgg_64_small_conv
+check_point_name: vgg_64_small_conv
+model:
+  arch:
+    name: OneStageDetector
+    backbone:
+      name: SmallVgg
+      out_stages: [2, 4] #[1, 2] #[2, 4]
+      stages_inplanes: [3, 8, 8, 6] #[3, 8, 8, 6]
+      stages_outplanes: [8, 8, 6, 6] #[8, 8, 6, 6]
+      stages_strides: [2, 2, 1, 2] #[1, 2, 1, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
+      maxpool_after: [0, 0, 0, 0, 0] #[0, 0, 0, 0]
+      maxpool_stride: 1
+      activation: LeakyReLU
+      pretrain: False
+    fpn:
+      name: GhostPAN #PAN #FPN  #PAN a litle slower than FPN
+      in_channels: [8, 6] #[8, 8] #[8, 6]
+      out_channels: 6 #4
+      use_depthwise: False
+      num_blocks: 1
+      kernel_size: 3
+      activation: LeakyReLU
+    head:
+      name: NanoDetPlusHead
+      num_classes: 1
+      input_channel: 6 #4 #Out channel of fpn
+      feat_channels: 3
+      stacked_convs: 1 #Its pass in head have so many conv in list
+      kernel_size: 3
+      strides: [4, 8] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
+      activation: LeakyReLU
+      reg_max: 4
+      norm_cfg:
+        type: BN
+      loss:
+        loss_qfl:
+          name: QualityFocalLoss
+          use_sigmoid: True
+          beta: 2.0
+          loss_weight: 1.0
+        loss_dfl:
+          name: DistributionFocalLoss
+          loss_weight: 0.25
+        loss_bbox:
+          name: GIoULoss
+          loss_weight: 2.0
+data:
+  train:
+    input_size: [96, 96] #[w,h]
+    keep_ratio: False
+    pipeline:
+      perspective: 0.0
+#      scale: [0.6, 1.4]
+#      stretch: [[1, 1], [1, 1]]
+#      rotation: 0
+#      shear: 0
+#      translate: 0.2
+#      flip: 0.5
+#      brightness: 0.2
+#      contrast: [0.6, 1.4]
+#      saturation: [0.5, 1.2]
+      normalize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
+#      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+  val:
+    input_size: [1920, 1088] #[96, 96] #[1920, 1088] #[w,h]
+    keep_ratio: False
+    pipeline:
+      perspective: 0.0
+      normalize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
+#      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+device:
+  gpu_ids: [0]
+  workers_per_gpu: 8
+  batchsize_per_gpu: 192
+schedule:
+  resume: 0
+  optimizer:
+    name: SGD
+    lr: 0.14
+    momentum: 0.9
+    weight_decay: 0.0001
+  warmup:
+    name: linear
+    steps: 300
+    ratio: 0.1
+  total_epochs: 280
+  lr_schedule:
+    name: MultiStepLR
+    milestones: [240,260,275]
+    gamma: 0.1
+  val_intervals: 10
+evaluator:
+  name: CocoDetectionEvaluator
+  save_key: mAP
+log:
+  interval: 1
+
+class_names: ['person']
