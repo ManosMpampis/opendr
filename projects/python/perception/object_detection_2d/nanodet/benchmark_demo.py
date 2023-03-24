@@ -19,11 +19,11 @@ from opendr.engine.data import Image
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="vgg_64")
-    parser.add_argument("--optimize-jit", help="", action="store_false")#false")
-    parser.add_argument("--optimize-trt", help="", action="store_false")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="vgg_64_small")
+    parser.add_argument("--optimize-jit", help="", action="store_false")#false")#false")
+    parser.add_argument("--optimize-trt", help="", action="store_true")
     parser.add_argument("--download", help="", action="store_true")
-    parser.add_argument("--mix", help="", action="store_true")
+    parser.add_argument("--mix", help="", action="store_false")#true")
     parser.add_argument("--repetitions", help="Determines the amount of repetitions to run", type=int, default=1000)
     parser.add_argument("--warmup", help="Determines the amount of warmup runs", type=int, default=100)
     parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.35)
@@ -39,9 +39,9 @@ if __name__ == '__main__':
     nanodet.download("./predefined_examples", mode="images", verbose=False)
 
     if args.optimize_jit:
-        nanodet.optimize(f"./jit/nanodet_{args.model}", optimization="jit", mix=True, verbose=False)
+        nanodet.optimize(f"./jit/nanodet_{args.model}", optimization="jit", mix=args.mix, verbose=False)
     if args.optimize_trt:
-        nanodet.optimize(f"./trt/nanodet_{args.model}", optimization="trt", verbose=False)
+        nanodet.optimize(f"./trt/nanodet_{args.model}", optimization="trt", mix=args.mix, verbose=False)
 
     nanodet.benchmark(repetitions=args.repetitions, warmup=args.warmup, conf_threshold=args.conf_threshold,
                       iou_threshold=args.iou_threshold, nms_max_num=args.nms, mix=args.mix)
