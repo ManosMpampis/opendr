@@ -25,6 +25,7 @@ from pytorch_lightning.callbacks import ProgressBar
 
 try:
     import tensorrt as trt
+    from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer import trt_dep
 except ImportError as e:
     warnings.warn(f"{e}, No TensorRT is installed")
 
@@ -41,7 +42,6 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import
     load_config,
     load_model_weight,
     mkdir,
-    common,
 )
 
 from opendr.engine.data import Image
@@ -53,9 +53,9 @@ from urllib.request import urlretrieve
 
 import onnxruntime as ort
 
-_MODEL_NAMES = {"EfficientNet_Lite0_320", "EfficientNet_Lite1_416", "EfficientNet_Lite2_512",
-                "RepVGG_A0_416", "t", "g", "m", "m_416", "m_0.5x", "m_1.5x", "m_1.5x_416",
-                "plus_m_320", "plus_m_1.5x_320", "plus_m_416", "plus_m_1.5x_416", "m_32", "vgg_64", "custom", "temp"}
+# _MODEL_NAMES = {"EfficientNet_Lite0_320", "EfficientNet_Lite1_416", "EfficientNet_Lite2_512",
+#                 "RepVGG_A0_416", "t", "g", "m", "m_416", "m_0.5x", "m_1.5x", "m_1.5x_416",
+#                 "plus_m_320", "plus_m_1.5x_320", "plus_m_416", "plus_m_1.5x_416", "m_32", "vgg_64", "custom", "temp"}
 
 
 torch.backends.cudnn.enabled = True
@@ -120,9 +120,9 @@ class NanodetLearner(Learner):
         :return: config with hyperparameters
         :rtype: dict
         """
-        assert (
-                model in _MODEL_NAMES
-        ), f"Invalid model selected. Choose one of {_MODEL_NAMES}."
+        # assert (
+        #         model in _MODEL_NAMES
+        # ), f"Invalid model selected. Choose one of {_MODEL_NAMES}."
         full_path = list()
         path = Path(__file__).parent / "algorithm" / "config"
         wanted_file = "nanodet_{}.yml".format(model)
@@ -461,7 +461,7 @@ class NanodetLearner(Learner):
         self.ort_session = ort.InferenceSession(onnx_path)
 
     def _save_trt(self, trt_path, verbose=True, conf_thresh=0.35,
-                   iou_thresh=0.6, nms_max_num=100, dataset=None):
+                   iou_thresh=0.6, nms_max_num=100, mix=False, dataset=None):
 
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
@@ -487,11 +487,12 @@ class NanodetLearner(Learner):
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(TRT_LOGGER)
 
-        network = builder.create_network(common.EXPLICIT_BATCH)
+        network = builder.create_network(trt_dep.EXPLICIT_BATCH)
         config = builder.create_builder_config()
-        config.set_flag(trt.BuilderFlag.FP16)
+        if mix:
+            config.set_flag(trt.BuilderFlag.FP16)
         parser = trt.OnnxParser(network, TRT_LOGGER)
-        config.max_workspace_size = common.GiB(1)
+        config.max_workspace_size = trt_dep.GiB(1)
         with open(export_path, "rb") as model:
             if not parser.parse(model.read()):
                 print("ERROR: Failed to parse the ONNX file.")
@@ -524,7 +525,7 @@ class NanodetLearner(Learner):
         with open(f'{trt_path}', 'rb') as f:
             engine_bytes = f.read()
             engine = runtime.deserialize_cuda_engine(engine_bytes)
-            self.trt_model = common.trt_model(engine, self.cfg)
+            self.trt_model = trt_dep.trt_model(engine, self.cfg)
 
         # self.trt_model = torch.jit.load(trt_path, map_location=self.device)
         return
@@ -599,18 +600,18 @@ class NanodetLearner(Learner):
         """
 
         optimization = optimization.lower()
-        if not os.path.exists(export_path):
-            if optimization == "jit":
-                self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
-                               nms_max_num=nms_max_num, mix=mix)
-            elif optimization == "onnx":
-                self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                                nms_max_num=nms_max_num, mix=mix)
-            elif optimization == "trt":
-                self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                               nms_max_num=nms_max_num, dataset=dataset)
-            else:
-                assert NotImplementedError
+        # if not os.path.exists(export_path):
+        if optimization == "jit":
+            self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+                           nms_max_num=nms_max_num, mix=mix)
+        elif optimization == "onnx":
+            self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
+                            nms_max_num=nms_max_num, mix=mix)
+        elif optimization == "trt":
+            self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
+                           nms_max_num=nms_max_num, mix=mix, dataset=dataset)
+        else:
+            assert NotImplementedError
         with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
             metadata = json.load(f)
         if optimization == "jit":
@@ -866,134 +867,90 @@ class NanodetLearner(Learner):
 
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num)
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, mix=mix)
+
+        def bench_loop(input, function, repetitions, warmup, sing_inputs=True, onnx_fun=False):
+            import numpy as np
+            output = None
+            starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            timings = np.zeros((repetitions, 1))
+            if onnx_fun:
+                for run in range(warmup):
+                    output = function(['output'], {'data': input})
+                for run in range(repetitions):
+                    starter.record()
+                    output = function(['output'], {'data': input})
+                    ender.record()
+                    torch.cuda.synchronize()
+                    timings[run] = starter.elapsed_time(ender)
+                return output, timings
+            if sing_inputs:
+                for run in range(warmup):
+                    output = function(input)
+                for run in range(repetitions):
+                    starter.record()
+                    output = function(input)
+                    ender.record()
+                    torch.cuda.synchronize()
+                    timings[run] = starter.elapsed_time(ender)
+                return output, timings
+            for run in range(warmup):
+                output = function(*input)
+            for run in range(repetitions):
+                starter.record()
+                output = function(*input)
+                ender.record()
+                torch.cuda.synchronize()
+                timings[run] = starter.elapsed_time(ender)
+            return output, timings
 
         # Preprocess measurement
-        preprocess_starter, preprocess_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
-            enable_timing=True)
-        preprocess_timings = np.zeros((repetitions, 1))
-        for run in range(warmup):
-            _ = self.predictor.preprocessing(dummy_input)
-        for run in range(repetitions):
-            preprocess_starter.record()
-            _input, *metadata = self.predictor.preprocessing(dummy_input)
-            preprocess_ender.record()
-            torch.cuda.synchronize()
-            preprocess_timings[run] = preprocess_starter.elapsed_time(preprocess_ender)
+        (_input, *metadata), preprocess_timings = bench_loop(dummy_input, self.predictor.preprocessing, repetitions,
+                                                             warmup, sing_inputs=True)
 
-        onnx_infer_timings = None
         # Onnx measurements
+        onnx_infer_timings = None
         if self.ort_session:
             # Inference
-            onnx_infer_starter, onnx_infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
-                enable_timing=True)
-            onnx_infer_timings = np.zeros((repetitions, 1))
-            for run in range(warmup):
-                _ = self.ort_session.run(['output'], {'data': _input.cpu().detach().numpy()})
-            for run in range(repetitions):
-                onnx_infer_starter.record()
-                preds = self.ort_session.run(['output'], {'data': _input.cpu().detach().numpy()})
-                onnx_infer_ender.record()
-                torch.cuda.synchronize()
-                onnx_infer_timings[run] = onnx_infer_starter.elapsed_time(onnx_infer_ender)
-            # Do not measure postprocessing because we will measure it in the actual run
-            _ = self.predictor.postprocessing(torch.from_numpy(preds[0]), _input, *metadata)
+            preds, onnx_infer_timings = bench_loop(dummy_input, self.predictor.preprocessing, repetitions, warmup,
+                                                   sing_inputs=True, onnx_fun=True)
 
-        jit_2_infer_timings = None
         # Jit measurements
+        jit_2_infer_timings = None
         if self.jit_only_model:
+            if mix and torch.__version__[:3] == "1.9":
+                self.jit_only_model = self.jit_only_model.half()
             try:
                 self.jit_only_model = torch.jit.optimize_for_inference(self.jit_only_model)
             except:
                 print("")
-            jit_2_infer_starter, jit_2_infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
-                enable_timing=True)
-            jit_2_infer_timings = np.zeros((repetitions, 1))
+            preds, jit_2_infer_timings = bench_loop((_input, *metadata), self.jit_only_model, repetitions, warmup,
+                                                    sing_inputs=False)
 
-            for run in range(warmup):
-                _ = self.jit_only_model(_input, *metadata)
-            for run in range(repetitions):
-                jit_2_infer_starter.record()
-                _ = self.jit_only_model(_input, *metadata)
-                jit_2_infer_ender.record()
-                torch.cuda.synchronize()
-                jit_2_infer_timings[run] = jit_2_infer_starter.elapsed_time(jit_2_infer_ender)
-
-        jit_infer_timings = None
         # Jit measurements
+        jit_infer_timings = None
         if self.jit_model:
+            if mix and torch.__version__[:3] == "1.9":
+                self.jit_model = self.jit_model.half()
             try:
                 self.jit_model = torch.jit.optimize_for_inference(self.jit_model)
             except:
                 print("")
-            jit_infer_starter, jit_infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
-                enable_timing=True)
-            jit_infer_timings = np.zeros((repetitions, 1))
+            preds, jit_infer_timings = bench_loop((_input, *metadata), self.jit_model, repetitions, warmup,
+                                                  sing_inputs=False)
 
-            for run in range(warmup):
-                _ = self.jit_model(_input, *metadata)
-            for run in range(repetitions):
-                jit_infer_starter.record()
-                _ = self.jit_model(_input, *metadata)
-                jit_infer_ender.record()
-                torch.cuda.synchronize()
-                jit_infer_timings[run] = jit_infer_starter.elapsed_time(jit_infer_ender)
-
-        trt_infer_timings = None
         # trt measurements
+        trt_infer_timings = None
         if self.trt_model:
-            trt_infer_starter, trt_infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(
-                enable_timing=True)
-            trt_infer_timings = np.zeros((repetitions, 1))
-
-            # self.predictor.model.to("cpu")
             np.copyto(self.trt_model.inputs[0].host, _input.cpu().detach().numpy().ravel())
-            for run in range(warmup):
-                _ = self.trt_model()#(_input.cpu().detach().numpy().ravel())
-            for run in range(repetitions):
-                trt_infer_starter.record()
-                _ = self.trt_model()#(_input.cpu().detach().numpy().ravel())
-                trt_infer_ender.record()
-                torch.cuda.synchronize()
-                trt_infer_timings[run] = trt_infer_starter.elapsed_time(trt_infer_ender)
+            preds, trt_infer_timings = bench_loop(None, self.trt_model, repetitions, warmup, sing_inputs=True)
 
         # Original Python measurements
-        infer_starter, infer_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        infer_timings = np.zeros((repetitions, 1))
-        if mix:
-            try:
-                with torch.cuda.amp.autocast():
-                    for run in range(warmup):
-                        _ = self.predictor(_input, *metadata)
-                    for run in range(repetitions):
-                        infer_starter.record()
-                        preds = self.predictor(_input, *metadata)
-                        infer_ender.record()
-                        torch.cuda.synchronize()
-                        infer_timings[run] = infer_starter.elapsed_time(infer_ender)
-            except:
-                _input = _input.half
-                self.predictor.model = self.predictor.model.half
-                for run in range(warmup):
-                    _ = self.predictor(_input, *metadata)
-                for run in range(repetitions):
-                    infer_starter.record()
-                    preds = self.predictor(_input, *metadata)
-                    infer_ender.record()
-                    torch.cuda.synchronize()
-                    infer_timings[run] = infer_starter.elapsed_time(infer_ender)
+        preds, infer_timings = bench_loop((_input, *metadata), self.predictor, repetitions, warmup, sing_inputs=False)
 
         # Post-processing measurements
-        post_starter, post_ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        post_timings = np.zeros((repetitions, 1))
-        for run in range(warmup):
-            _ = self.predictor.postprocessing(preds, _input, *metadata)
-        for run in range(repetitions):
-            post_starter.record()
-            _ = self.predictor.postprocessing(preds, _input, *metadata)
-            post_ender.record()
-            torch.cuda.synchronize()
-            post_timings[run] = post_starter.elapsed_time(post_ender)
+        _, post_timings = bench_loop((preds, _input, *metadata), self.predictor.postprocessing, repetitions, warmup,
+                                     sing_inputs=False)
 
         # Measure std and mean of times
         std_preprocess_timings = np.std(preprocess_timings)
@@ -1024,12 +981,13 @@ class NanodetLearner(Learner):
         mean_infer_timings = np.mean(infer_timings)
         mean_post_timings = np.mean(post_timings)
 
-        if self.jit_only_model:
-            mean_jit_2_infer_timings = np.mean(jit_2_infer_timings)
         if self.jit_model:
             mean_jit_infer_timings = np.mean(jit_infer_timings)
-        if self.jit_model and self.jit_only_model:
-            mean_jit_preprocessing_timings = mean_jit_infer_timings - mean_jit_2_infer_timings
+            if self.jit_only_model:
+                mean_jit_2_infer_timings = np.mean(jit_2_infer_timings)
+                mean_jit_preprocessing_timings = mean_jit_infer_timings - mean_jit_2_infer_timings
+        elif self.jit_only_model:
+            mean_jit_2_infer_timings = np.mean(jit_2_infer_timings)
         if self.trt_model:
             mean_trt_infer_timings = np.mean(trt_infer_timings)
 
