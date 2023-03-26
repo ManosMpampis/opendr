@@ -97,6 +97,7 @@ class NanodetLearner(Learner):
         self.ort_session = None
         self.jit_model = None
         self.jit_only_model = None
+        self.jit_postprocessing = None
         self.trt_model = None
         self.predictor = None
 
@@ -502,6 +503,14 @@ class NanodetLearner(Learner):
         except ImportError as e:
             print(f"{e}, will not run simplify")
 
+        from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.utilities import Postprocessor
+        postprocessor = Postprocessor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
+                                      iou_thresh=iou_thresh, nms_max_num=nms_max_num)
+        with torch.no_grad():
+            export_path_pth = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.pth")
+            post_process_scripted = torch.jit.script(postprocessor)
+            post_process_scripted.save(export_path_pth)
+
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(TRT_LOGGER)
 
@@ -523,7 +532,7 @@ class NanodetLearner(Learner):
             b_engine_serialized = bytearray(engine_serialized)
             f.write(b_engine_serialized)
 
-        metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.trt"], "framework": "pytorch",
+        metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.trt", f"nanodet_{self.cfg.check_point_name}.pth"], "framework": "pytorch",
                     "format": "tensorRT", "has_data": False, "optimized": True, "optimizer_info": {},
                     "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
                                          "num_classes": len(self.classes), "reg_max": self.cfg.model.arch.head.reg_max,
@@ -534,16 +543,18 @@ class NanodetLearner(Learner):
 
         return
 
-    def _load_trt(self, trt_path, verbose=True):
+    def _load_trt(self, trt_paths, verbose=True):
         if verbose:
-            print("Loading TensorRT runtime inference session from {}".format(trt_path))
+            print("Loading TensorRT runtime inference session from {}".format(trt_paths[0]))
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         runtime = trt.Runtime(TRT_LOGGER)
-        with open(f'{trt_path}', 'rb') as f:
+        with open(f'{trt_paths[0]}', 'rb') as f:
             engine_bytes = f.read()
             engine = runtime.deserialize_cuda_engine(engine_bytes)
             self.trt_model = trt_dep.trt_model(engine, self.cfg)
+
+        self.jit_postprocessing = torch.jit.load(trt_paths[1], map_location=self.device)
         return
 
     def _save_jit(self, jit_path, verbose=True, conf_threshold=0.35, iou_threshold=0.6,
@@ -636,7 +647,8 @@ class NanodetLearner(Learner):
         elif optimization == "onnx":
             self._load_onnx(os.path.join(export_path, metadata["model_paths"][0]), verbose)
         elif optimization == "trt":
-            self._load_trt(os.path.join(export_path, metadata["model_paths"][0]), verbose)
+            metadata["model_paths"] = [os.path.join(export_path, path) for path in metadata["model_paths"]]
+            self._load_trt(metadata["model_paths"], verbose)
         else:
             assert NotImplementedError
         return
@@ -919,6 +931,47 @@ class NanodetLearner(Learner):
                 torch.cuda.synchronize()
                 timings[run] = starter.elapsed_time(ender)
             return output, timings
+        def bench_loop2(input, metadatab, function1, function2, repetitions, warmup, onnx_fun=False, trt_fun=False, trt_fun2_in=None):
+            import numpy as np
+            output = None
+            starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            timings = np.zeros((repetitions, 1))
+            if onnx_fun:
+                for run in range(warmup):
+                    output1 = function1(['output'], {'data': input})
+                    output2 = function2(torch.from_numpy(output1[0]), input, *metadatab)
+                for run in range(repetitions):
+                    starter.record()
+                    output1 = function1(['output'], {'data': input})
+                    output2 = function2(torch.from_numpy(output1[0]), input, *metadatab)
+                    ender.record()
+                    torch.cuda.synchronize()
+                    timings[run] = starter.elapsed_time(ender)
+                return output2, timings
+            if trt_fun:
+                input_trt = input.cpu().detach().numpy().ravel()
+                for run in range(warmup):
+                    output1 = function1(input_trt)
+                    output2 = function2(trt_fun2_in, input, *metadatab)
+                for run in range(repetitions):
+                    starter.record()
+                    output1 = function1(input_trt)
+                    output2 = function2(trt_fun2_in, input, *metadatab)
+                    ender.record()
+                    torch.cuda.synchronize()
+                    timings[run] = starter.elapsed_time(ender)
+                return output2, timings
+            for run in range(warmup):
+                output1 = function1(input)
+                output2 = function2(output1, input, *metadatab)
+            for run in range(repetitions):
+                starter.record()
+                output1 = function1(input)
+                output2 = function2(output1, input, *metadatab)
+                ender.record()
+                torch.cuda.synchronize()
+                timings[run] = starter.elapsed_time(ender)
+            return output2, timings
 
         # Preprocess measurement
         (_input, *metadata), preprocess_timings = bench_loop((dummy_input, True), self.predictor.preprocessing, 10,
@@ -960,7 +1013,19 @@ class NanodetLearner(Learner):
         trt_infer_timings = None
         if self.trt_model:
             np.copyto(self.trt_model.inputs[0].host, _input.cpu().detach().numpy().ravel())
-            preds_trt, trt_infer_timings = bench_loop(_input.cpu().detach().numpy().ravel(), self.trt_model, repetitions, warmup, sing_inputs=True)
+            preds_trt, trt_infer_timings = bench_loop(_input.cpu().detach().numpy().ravel(), self.trt_model,
+                                                      repetitions, warmup, sing_inputs=True)
+
+            preds_trt_tensor = torch.from_numpy(preds_trt).to(self.device)
+            if mix:
+                preds_trt_tensor = preds_trt_tensor.half()
+            post_out_trt, trt_post_timings = bench_loop((preds_trt_tensor, _input, *metadata), self.jit_postprocessing,
+                                                        repetitions, warmup, sing_inputs=False)
+
+            post_out_trt, trt_infer_post_timings = bench_loop2(_input, metadatab=metadata, function1=self.trt_model,
+                                                               function2=self.jit_postprocessing,
+                                                               repetitions=repetitions, warmup=warmup, trt_fun=True,
+                                                               trt_fun2_in=preds_trt_tensor)
 
         # Original Python measurements
         if mix:
@@ -970,15 +1035,20 @@ class NanodetLearner(Learner):
         # Post-processing measurements
         post_out, post_timings = bench_loop((preds, _input, *metadata), self.predictor.postprocessing, repetitions, warmup,
                                             sing_inputs=False)
+        post_out, infer_post_timings = bench_loop2(_input, metadatab=metadata, function1=self.predictor,
+                                                   function2=self.predictor.postprocessing, repetitions=repetitions,
+                                                   warmup=warmup)
 
         # Measure std and mean of times
         std_preprocess_timings = np.std(preprocess_timings)
         std_infer_timings = np.std(infer_timings)
         std_post_timings = np.std(post_timings)
+        std_infer_post_timings = np.std(infer_post_timings)
 
         mean_preprocess_timings = np.mean(preprocess_timings)
         mean_infer_timings = np.mean(infer_timings)
         mean_post_timings = np.mean(post_timings)
+        mean_infer_post_timings = np.mean(infer_post_timings)
 
         if self.jit_model:
             mean_jit_infer_timings = np.mean(jit_infer_timings)
@@ -989,26 +1059,28 @@ class NanodetLearner(Learner):
             mean_jit_2_infer_timings = np.mean(jit_2_infer_timings)
         if self.trt_model:
             mean_trt_infer_timings = np.mean(trt_infer_timings)
-
+            mean_trt_post_timings = np.mean(trt_post_timings)
+            mean_trt_infer_post_timings = np.mean(trt_infer_post_timings)
         if self.ort_session:
             mean_onnx_infer_timings = np.mean(onnx_infer_timings)
 
         # mean times to fps, torch measures in milliseconds
         fps_preprocess_timings = 1000/mean_preprocess_timings
         fps_infer_timings = 1000/mean_infer_timings
-        fps_ifer_post_timings = 1000/(mean_infer_timings + mean_post_timings)
         fps_post_timings = 1000/mean_post_timings
+        fps_ifer_post_timings = 1000 / mean_infer_post_timings
 
         if self.jit_only_model:
             fps_jit_2_infer_timings = 1000/mean_jit_2_infer_timings
         if self.jit_model:
             fps_jit_infer_timings = 1000/mean_jit_infer_timings
         if self.jit_model and self.jit_only_model:
-            fps_jit_preprocessing_timings = 1000/mean_jit_preprocessing_timings
+            fps_jit_postprocessing_timings = 1000/mean_jit_preprocessing_timings
 
         if self.trt_model:
             fps_trt_infer_timings = 1000 / mean_trt_infer_timings
-            fps_onnx_infer_post_timings = 1000 / (mean_trt_infer_timings + mean_post_timings)
+            fps_jit_postprocessing_timings = 1000 / mean_trt_post_timings
+            fps_trt_infer_post_timings = 1000 / mean_trt_infer_post_timings
         if self.ort_session:
             fps_onnx_infer_timings = 1000/mean_onnx_infer_timings
             fps_onnx_infer_post_timings = 1000/(mean_onnx_infer_timings + mean_post_timings)
@@ -1025,14 +1097,15 @@ class NanodetLearner(Learner):
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s")
             if self.jit_only_model:
                 print(f"infer          fps = {fps_jit_2_infer_timings} evn/s")
-                print(f"postprocessing fps = {fps_jit_preprocessing_timings} evn/s")
+                print(f"postprocessing fps = {fps_jit_postprocessing_timings} evn/s")
             print(f"infer + postpr fps = {fps_jit_infer_timings} evn/s")
 
         if self.trt_model:
             print(f"\n\n=== TRT measurements === \n"
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s")
             print(f"infer          fps = {fps_trt_infer_timings} evn/s\n"
-                  f"infer + postpr fps = {fps_onnx_infer_post_timings} evn/s\n\n\n")
+                  f"postprocessing fps = {fps_jit_postprocessing_timings} evn/s\n"
+                  f"infer + postpr fps = {fps_trt_infer_post_timings} env/s\n\n")
 
         if self.ort_session:
             print(f"\n\n=== ONNX measurements === \n"
@@ -1045,6 +1118,7 @@ class NanodetLearner(Learner):
         print(f"std pre: {std_preprocess_timings}")
         print(f"std infer: {std_infer_timings}")
         print(f"std post: {std_post_timings}")
+        print(f"std infer post: {std_infer_post_timings}")
 
         if self.jit_only_model:
             std_jit_2_infer_timings = np.std(jit_2_infer_timings)
@@ -1056,7 +1130,11 @@ class NanodetLearner(Learner):
 
         if self.trt_model:
             std_trt_infer_timings = np.std(trt_infer_timings)
-            print(f"std trt infer+post: {std_trt_infer_timings}")
+            std_trt_post_timings = np.std(trt_post_timings)
+            std_trt_infer_post_timings = np.std(trt_infer_post_timings)
+            print(f"std trt infer: {std_trt_infer_timings}\n"
+                  f"std trt post : {std_trt_post_timings}\n"
+                  f"std trt infer post: {std_trt_infer_post_timings}")
 
         if self.ort_session:
             std_onnx_infer_timings = np.std(onnx_infer_timings)

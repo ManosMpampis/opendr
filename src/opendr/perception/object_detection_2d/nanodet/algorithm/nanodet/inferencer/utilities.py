@@ -93,3 +93,31 @@ class Predictor(nn.Module):
         res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
                                            nms_max_num=self.nms_max_num)
         return res
+
+
+class Postprocessor(nn.Module):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100):
+        super(Postprocessor, self).__init__()
+        self.cfg = cfg
+        self.device = device
+        self.conf_thresh = conf_thresh
+        self.iou_thresh = iou_thresh
+        self.nms_max_num = nms_max_num
+        if self.cfg.model.arch.backbone.name == "RepVGG":
+            deploy_config = self.cfg.model
+            deploy_config.arch.backbone.update({"deploy": True})
+            deploy_model = build_model(deploy_config)
+            from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.repvgg\
+                import repvgg_det_model_convert
+            model = repvgg_det_model_convert(model, deploy_model)
+
+        self.model = model.to(device).eval()
+
+        for para in self.model.parameters():
+            para.requires_grad = False
+
+    def forward(self, preds, input, height, width, warp_matrix):
+        meta = {"height": height, "width": width, 'img': input, 'warp_matrix': warp_matrix}
+        res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
+                                           nms_max_num=self.nms_max_num)
+        return res
