@@ -34,7 +34,7 @@ class NanoDetHead(GFLHead):
         input_channel,
         stacked_convs=2,
         octave_base_scale=5,
-        conv_type="DWConv",
+        use_depthwise=True,
         conv_cfg=None,
         norm_cfg=dict(type="BN"),
         reg_max=16,
@@ -46,7 +46,7 @@ class NanoDetHead(GFLHead):
     ):
         self.share_cls_reg = share_cls_reg
         self.activation = activation
-        self.ConvModule = ConvModule if conv_type == "Conv" else DepthwiseConvModule
+        self.ConvModule = DepthwiseConvModule if use_depthwise else ConvModule
         super(NanoDetHead, self).__init__(
             num_classes,
             loss,
