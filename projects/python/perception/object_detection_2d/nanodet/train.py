@@ -19,7 +19,7 @@ from opendr.perception.object_detection_2d.datasets import XMLBasedDataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="vgg_64") # "temp" "m" "plus_m_320"
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="vgg_64_very_small") # "temp" "m" "plus_m_320"
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
     parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=1)
     parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.01)
