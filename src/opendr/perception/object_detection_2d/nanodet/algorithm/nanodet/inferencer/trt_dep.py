@@ -201,7 +201,7 @@ class trt_model():
         nclass = model_cfg["model"]["arch"]["head"]["num_classes"]
         reg = model_cfg["model"]["arch"]["head"]["reg_max"]
         out_cls_reg_dim = nclass + ((reg + 1)*4)
-        input_size = model_cfg["data"]["val"]["input_size"]
+        input_size = model_cfg["data"]["bench_test"]["input_size"]
         strides = model_cfg["model"]["arch"]["head"]["strides"]
         out_sizes = [(input_size[0]/stride)*(input_size[1]/stride) for stride in strides]
         out_feature_dim = 0
@@ -212,5 +212,6 @@ class trt_model():
     # def __call__(self, input):
     #     np.copyto(self.inputs[0].host, input)
     def __call__(self, input):
+        # np.copyto(self.inputs[0].host, input)
         preds = do_inference_v2(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream)
         return preds[0].reshape(self.output_shape)

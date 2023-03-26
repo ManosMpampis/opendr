@@ -16,7 +16,6 @@
 
 import torch
 import torch.nn as nn
-import cv2
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.batch_process import divisible_padding
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transform import Pipeline
@@ -50,12 +49,10 @@ class Predictor(nn.Module):
 
     def trace_model(self, dummy_input):
         self.traced_model = torch.jit.trace(self, dummy_input)
-        # self.traced_model = torch.jit.trace(self.model, dummy_input)
         return True
 
     def script_model(self, img, height, width, warp_matrix):
         preds = self.traced_model(img, height, width, warp_matrix)
-        # preds = self.traced_model(img)
         scripted_model = self.postprocessing(preds, img, height, width, warp_matrix)
         return scripted_model
 
@@ -64,26 +61,25 @@ class Predictor(nn.Module):
             return self.script_model(img, height, width, warp_matrix)
         # In tracing (Jit and Onnx optimizations) we must first run the pipeline before the graf,
         # cv2 is needed, and it is installed with abi cxx11 but torch is in cxx<11
-        meta = {"img": img}
-        meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
-        if self.mix:
-            try:
-                with torch.cuda.amp.autocast():
-                    results = self.model.inference(meta)
-            except:
-                results = self.model.inference(meta)
-        else:
-            results = self.model.inference(meta)
-        return results
+        return self.model.inference(img)
 
-    def preprocessing(self, img):
+    def preprocessing(self, img, bench=False):
+        if bench:
+            try:
+                input_size = self.cfg.data.bench_test.input_size
+            except AttributeError as e:
+                print(f"{e}, val input will be used")
+                input_size = self.cfg.data.val.input_size
+        else:
+            input_size = self.cfg.data.val.input_size
         img_info = {"id": 0}
         height, width = img.shape[:2]
         img_info["height"] = height
         img_info["width"] = width
         meta = dict(img_info=img_info, raw_img=img, img=img)
-        meta = self.pipeline(None, meta, self.cfg.data.val.input_size)
+        meta = self.pipeline(None, meta, input_size)
         meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device)
+        meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
 
         _input = meta["img"]
         _height = torch.tensor(height)
@@ -94,7 +90,6 @@ class Predictor(nn.Module):
 
     def postprocessing(self, preds, input, height, width, warp_matrix):
         meta = {"height": height, "width": width, 'img': input, 'warp_matrix': warp_matrix}
-        meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
         res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
                                            nms_max_num=self.nms_max_num)
         return res

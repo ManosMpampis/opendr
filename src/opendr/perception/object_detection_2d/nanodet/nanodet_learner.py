@@ -104,13 +104,13 @@ class NanodetLearner(Learner):
         self.model = build_model(self.cfg.model)
         self.logger = None
         self.task = None
-        if model_log_name is not None:
-            # if os.path.exists(f'./models/{model_log_name}'):
-            #     import shutil
-            #     shutil.rmtree(f'./models/{model_log_name}')
-            writer = SummaryWriter(f'./models/{model_log_name}')
-            writer.add_graph(self.model.eval(), self.__dummy_input()[0].to("cpu").unsqueeze(0))
-            writer.close()
+        # if model_log_name is not None:
+        #     # if os.path.exists(f'./models/{model_log_name}'):
+        #     #     import shutil
+        #     #     shutil.rmtree(f'./models/{model_log_name}')
+        #     writer = SummaryWriter(f'./models/{model_log_name}')
+        #     writer.add_graph(self.model.eval(), self.__dummy_input()[0].to("cpu").unsqueeze(0))
+        #     writer.close()
 
     def _load_hparam(self, model: str):
         """ Load hyperparameters for nanodet models and training configuration
@@ -385,9 +385,15 @@ class NanodetLearner(Learner):
         return NotImplementedError
 
     def __dummy_input(self):
-        width, height = self.cfg.data.val.input_size
+        from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.batch_process import divisible_padding
+        try:
+            width, height = self.cfg.data.bench_test.input_size
+        except AttributeError as e:
+            print(f"{e}, val input will be used")
+            width, height = self.cfg.data.val.input_size
         dummy_input = (
-            torch.randn((3, height, width), device=self.device, dtype=torch.float32),
+            divisible_padding(torch.randn((3, height, width),
+                                          device=self.device, dtype=torch.float32), divisible=torch.tensor(32)),
             torch.tensor(width, device="cpu", dtype=torch.int64),
             torch.tensor(height, device="cpu", dtype=torch.int64),
             torch.eye(3, device="cpu", dtype=torch.float32),
@@ -395,7 +401,7 @@ class NanodetLearner(Learner):
         return dummy_input
 
     def __cv_dumy_input(self):
-        width, height = self.cfg.data.val.input_size
+        width, height = self.cfg.data.bench_test.input_size
         return torch.randn((width, height, 3), device="cpu", dtype=torch.float32).numpy()
 
     def _save_onnx(self, onnx_path, do_constant_folding=False, verbose=True, conf_thresh=0.35,
@@ -484,6 +490,18 @@ class NanodetLearner(Learner):
             output_names=['output'],
         )
 
+        try:
+            import onnxsim
+            import onnx
+
+            input_data = {"data": dummy_input[0].detach().cpu().numpy()}
+            model_sim, flag = onnxsim.simplify(export_path, input_data=input_data)
+            if flag:
+                onnx.save(model_sim, export_path)
+                print("ONNX simplified successfully.")
+        except ImportError as e:
+            print(f"{e}, will not run simplify")
+
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(TRT_LOGGER)
 
@@ -526,8 +544,6 @@ class NanodetLearner(Learner):
             engine_bytes = f.read()
             engine = runtime.deserialize_cuda_engine(engine_bytes)
             self.trt_model = trt_dep.trt_model(engine, self.cfg)
-
-        # self.trt_model = torch.jit.load(trt_path, map_location=self.device)
         return
 
     def _save_jit(self, jit_path, verbose=True, conf_threshold=0.35, iou_threshold=0.6,
@@ -581,7 +597,7 @@ class NanodetLearner(Learner):
         return
 
     def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6,
-                 nms_max_num=100, mix=False, dataset=None):
+                 nms_max_num=100, mix=False, dataset=None, new_load=True):
         """
         Method for optimizing the model with ONNX or JIT.
         :param export_path: The file path to the folder where the optimized model will be saved. If a model already
@@ -600,18 +616,18 @@ class NanodetLearner(Learner):
         """
 
         optimization = optimization.lower()
-        # if not os.path.exists(export_path):
-        if optimization == "jit":
-            self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
-                           nms_max_num=nms_max_num, mix=mix)
-        elif optimization == "onnx":
-            self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                            nms_max_num=nms_max_num, mix=mix)
-        elif optimization == "trt":
-            self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                           nms_max_num=nms_max_num, mix=mix, dataset=dataset)
-        else:
-            assert NotImplementedError
+        if not os.path.exists(export_path) or new_load:
+            if optimization == "jit":
+                self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
+                               nms_max_num=nms_max_num, mix=mix)
+            elif optimization == "onnx":
+                self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
+                                nms_max_num=nms_max_num, mix=mix)
+            elif optimization == "trt":
+                self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
+                               nms_max_num=nms_max_num, mix=mix, dataset=dataset)
+            else:
+                assert NotImplementedError
         with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
             metadata = json.load(f)
         if optimization == "jit":
@@ -663,7 +679,7 @@ class NanodetLearner(Learner):
         if self.logger:
             self.logger.info("Setting up data...")
 
-        train_dataset = build_dataset(self.cfg.data.val, dataset, self.cfg.class_names, "train")
+        train_dataset = build_dataset(self.cfg.data.train, dataset, self.cfg.class_names, "train")
         val_dataset = train_dataset if val_dataset is None else \
             build_dataset(self.cfg.data.val, val_dataset, self.cfg.class_names, "val")
 
@@ -905,9 +921,10 @@ class NanodetLearner(Learner):
             return output, timings
 
         # Preprocess measurement
-        (_input, *metadata), preprocess_timings = bench_loop(dummy_input, self.predictor.preprocessing, repetitions,
-                                                             warmup, sing_inputs=True)
-
+        (_input, *metadata), preprocess_timings = bench_loop((dummy_input, True), self.predictor.preprocessing, 10,
+                                                             1, sing_inputs=False)
+        if mix:
+            _input = _input.half()
         # Onnx measurements
         onnx_infer_timings = None
         if self.ort_session:
@@ -924,8 +941,8 @@ class NanodetLearner(Learner):
                 self.jit_only_model = torch.jit.optimize_for_inference(self.jit_only_model)
             except:
                 print("")
-            preds, jit_2_infer_timings = bench_loop((_input, *metadata), self.jit_only_model, repetitions, warmup,
-                                                    sing_inputs=False)
+            preds_jit, jit_2_infer_timings = bench_loop((_input, *metadata), self.jit_only_model, repetitions, warmup,
+                                                        sing_inputs=False)
 
         # Jit measurements
         jit_infer_timings = None
@@ -936,46 +953,28 @@ class NanodetLearner(Learner):
                 self.jit_model = torch.jit.optimize_for_inference(self.jit_model)
             except:
                 print("")
-            preds, jit_infer_timings = bench_loop((_input, *metadata), self.jit_model, repetitions, warmup,
-                                                  sing_inputs=False)
+            post_out_jit, jit_infer_timings = bench_loop((_input, *metadata), self.jit_model, repetitions, warmup,
+                                                         sing_inputs=False)
 
         # trt measurements
         trt_infer_timings = None
         if self.trt_model:
             np.copyto(self.trt_model.inputs[0].host, _input.cpu().detach().numpy().ravel())
-            preds, trt_infer_timings = bench_loop(None, self.trt_model, repetitions, warmup, sing_inputs=True)
+            preds_trt, trt_infer_timings = bench_loop(_input.cpu().detach().numpy().ravel(), self.trt_model, repetitions, warmup, sing_inputs=True)
 
         # Original Python measurements
+        if mix:
+            self.predictor.model = self.predictor.model.half()
         preds, infer_timings = bench_loop((_input, *metadata), self.predictor, repetitions, warmup, sing_inputs=False)
 
         # Post-processing measurements
-        _, post_timings = bench_loop((preds, _input, *metadata), self.predictor.postprocessing, repetitions, warmup,
-                                     sing_inputs=False)
+        post_out, post_timings = bench_loop((preds, _input, *metadata), self.predictor.postprocessing, repetitions, warmup,
+                                            sing_inputs=False)
 
         # Measure std and mean of times
         std_preprocess_timings = np.std(preprocess_timings)
         std_infer_timings = np.std(infer_timings)
         std_post_timings = np.std(post_timings)
-        print(f"\n\n++++++ STD OF TIMES ++++++")
-        print(f"std pre: {std_preprocess_timings}")
-        print(f"std infer: {std_infer_timings}")
-        print(f"std post: {std_post_timings}")
-
-        if self.jit_only_model:
-            std_jit_2_infer_timings = np.std(jit_2_infer_timings)
-            print(f"std JIT infer: {std_jit_2_infer_timings}")
-
-        if self.jit_model:
-            std_jit_infer_timings = np.std(jit_infer_timings)
-            print(f"std JIT infer+post: {std_jit_infer_timings}")
-
-        if self.trt_model:
-            std_trt_infer_timings = np.std(trt_infer_timings)
-            print(f"std trt infer+post: {std_trt_infer_timings}")
-
-        if self.ort_session:
-            std_onnx_infer_timings = np.std(onnx_infer_timings)
-            print(f"std ONNX infer: {std_onnx_infer_timings}")
 
         mean_preprocess_timings = np.mean(preprocess_timings)
         mean_infer_timings = np.mean(infer_timings)
@@ -1015,7 +1014,7 @@ class NanodetLearner(Learner):
             fps_onnx_infer_post_timings = 1000/(mean_onnx_infer_timings + mean_post_timings)
 
         # Print measurements
-        print(f"\n\nMeasure of model: {self.cfg.check_point_name}")
+        print(f"\n\nMeasure of model: {self.cfg.check_point_name} Half precision: {mix}")
         print(f"\n=== Python measurements === \n"
               f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
               f"infer          fps = {fps_infer_timings} evn/s\n"#)
@@ -1040,6 +1039,27 @@ class NanodetLearner(Learner):
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
                   f"infer          fps = {fps_onnx_infer_timings} evn/s\n"
                   f"postprocessing fps = {fps_post_timings} evn/s\n"
-                  f"infer + postpr fps = {fps_onnx_infer_post_timings} evn/s\n\n\n")
+                  f"infer + postpr fps = {fps_onnx_infer_post_timings} evn/s")
+
+        print(f"\n\n++++++ STD OF TIMES ++++++")
+        print(f"std pre: {std_preprocess_timings}")
+        print(f"std infer: {std_infer_timings}")
+        print(f"std post: {std_post_timings}")
+
+        if self.jit_only_model:
+            std_jit_2_infer_timings = np.std(jit_2_infer_timings)
+            print(f"std JIT infer: {std_jit_2_infer_timings}")
+
+        if self.jit_model:
+            std_jit_infer_timings = np.std(jit_infer_timings)
+            print(f"std JIT infer+post: {std_jit_infer_timings}")
+
+        if self.trt_model:
+            std_trt_infer_timings = np.std(trt_infer_timings)
+            print(f"std trt infer+post: {std_trt_infer_timings}")
+
+        if self.ort_session:
+            std_onnx_infer_timings = np.std(onnx_infer_timings)
+            print(f"std ONNX infer: {std_onnx_infer_timings}")
 
         return

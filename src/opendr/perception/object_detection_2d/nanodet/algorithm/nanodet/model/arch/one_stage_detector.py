@@ -44,9 +44,9 @@ class OneStageDetector(nn.Module):
             x = self.head(x)
         return x
 
-    def inference(self, meta: Dict[str, torch.Tensor]):
+    def inference(self, img):#meta: Dict[str, torch.Tensor]):
         with torch.no_grad():
-            preds = self(meta["img"])
+            preds = self(img)
         return preds
 
     def forward_train(self, gt_meta):
