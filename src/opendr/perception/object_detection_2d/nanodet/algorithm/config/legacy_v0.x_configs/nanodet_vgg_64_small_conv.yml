@@ -6,32 +6,37 @@ model:
     name: OneStageDetector
     backbone:
       name: SmallVgg
-      out_stages: [2, 4] #[1, 2] #[2, 4]
-      stages_inplanes: [3, 8, 8, 6] #[3, 8, 8, 6]
-      stages_outplanes: [8, 8, 6, 6] #[8, 8, 6, 6]
+      out_stages: [3, 4]
+      stages_inplanes: [3, 8, 8, 8]
+      stages_outplanes: [8, 8, 8, 8]
       stages_strides: [2, 2, 1, 2] #[1, 2, 1, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
-      maxpool_after: [0, 0, 0, 0, 0] #[0, 0, 0, 0]
+      maxpool_after: [0, 0, 0, 0]
       maxpool_stride: 1
       activation: LeakyReLU
       pretrain: False
     fpn:
-      name: GhostPAN #PAN #FPN  #PAN a litle slower than FPN
-      in_channels: [8, 6] #[8, 8] #[8, 6]
-      out_channels: 6 #4
+      name: GhostPAN #PAN
+      in_channels: [8, 8] #[8, 6]
+      out_channels: 6
+      upsample_cfg:
+        scale_factor: 2
+        mode: bilinear
       use_depthwise: False
       num_blocks: 1
       kernel_size: 3
       activation: LeakyReLU
     head:
-      name: NanoDetPlusHead
+      name: NanoDetPlusHead #NanoDetPlusHead NanoDetHead
       num_classes: 1
       input_channel: 6 #4 #Out channel of fpn
-      feat_channels: 3
+      feat_channels: 6
       stacked_convs: 1 #Its pass in head have so many conv in list
-      kernel_size: 3
+      use_depthwise: False
+#      octave_base_scale: 1 #Only in NanoDetHead
+      kernel_size: 3 #Only in NanoDetPlusHead
       strides: [4, 8] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
       activation: LeakyReLU
-      reg_max: 4
+      reg_max: 7
       norm_cfg:
         type: BN
       loss:
@@ -64,12 +69,18 @@ data:
       normalize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
 #      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   val:
-    input_size: [1920, 1088] #[96, 96] #[1920, 1088] #[w,h]
+    input_size: [96, 96] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
     pipeline:
       perspective: 0.0
       normalize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
 #      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+  bench_test:
+    input_size: [1920, 1088]
+    keep_ratio: False
+    pipeline:
+      perspective: 0.0
+      normilize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
 device:
   gpu_ids: [0]
   workers_per_gpu: 8
@@ -77,24 +88,24 @@ device:
 schedule:
   resume: 0
   optimizer:
-    name: SGD
-    lr: 0.14
-    momentum: 0.9
-    weight_decay: 0.0001
+    name: AdamW
+    lr: 0.001
+    weight_decay: 0.05
   warmup:
     name: linear
-    steps: 300
-    ratio: 0.1
-  total_epochs: 280
+    steps: 500
+    ratio: 0.0001
+  total_epochs: 300
   lr_schedule:
-    name: MultiStepLR
-    milestones: [240,260,275]
-    gamma: 0.1
+    name: CosineAnnealingLR
+    T_max: 300
+    eta_min: 0.00005
   val_intervals: 10
+grad_clip: 35
 evaluator:
   name: CocoDetectionEvaluator
   save_key: mAP
 log:
   interval: 1
 
-class_names: ['person']
+class_names: ['player']

@@ -28,6 +28,7 @@ model:
       input_channel: 6 #4 #Out channel of fpn
       feat_channels: 3
       stacked_convs: 1 #Its pass in head have so many conv in list
+      use_depthwise: False
       kernel_size: 3
       strides: [4, 8] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
       activation: LeakyReLU
@@ -70,6 +71,12 @@ data:
       perspective: 0.0
       normalize: [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
 #      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+  bench_test:
+    input_size: [ 1920, 1088 ]
+    keep_ratio: False
+    pipeline:
+      perspective: 0.0
+      normilize: [ [ 0.0, 0.0, 0.0 ], [ 1.0, 1.0, 1.0 ] ]
 device:
   gpu_ids: [0]
   workers_per_gpu: 8
