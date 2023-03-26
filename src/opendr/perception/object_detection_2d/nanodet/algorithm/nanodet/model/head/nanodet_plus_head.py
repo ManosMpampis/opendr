@@ -154,6 +154,21 @@ class NanoDetPlusHead(nn.Module):
         outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
         return outputs
 
+    @torch.jit.unused
+    def forward_fork(self, feats: List[Tensor]):
+        futures = [torch.jit.fork(self.fork_stem, feats[idx], cls_convs, gfl_cls)
+                   for idx, (cls_convs, gfl_cls) in enumerate(zip(self.cls_convs, self.gfl_cls))
+                   ]
+        outputs = [torch.jit.wait(future) for future in futures]
+        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
+        return outputs
+
+    @torch.jit.unused
+    def fork_stem(self, feat: Tensor, cls_convs, gfl_cls):
+        for conv in cls_convs:
+            feat = conv(feat)
+        return gfl_cls(feat).flatten(start_dim=2)
+
     def loss(self, preds, gt_meta, aux_preds=None):
         """Compute losses.
         Args:
@@ -485,7 +500,7 @@ class NanoDetPlusHead(nn.Module):
         mlvl_center_priors = []
         for i, stride in enumerate(self.strides):
             proiors = self.get_single_level_center_priors(
-                b, featmap_sizes[i], stride, torch.float32, device
+                b, featmap_sizes[i], stride, cls_preds.dtype, device
             )
             mlvl_center_priors.append(proiors)
 
