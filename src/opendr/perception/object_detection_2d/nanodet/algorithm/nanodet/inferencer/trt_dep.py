@@ -17,8 +17,7 @@
 
 import argparse
 import os
-
-import numpy as np
+import torch
 
 # Use autoprimaryctx if available (pycuda >= 2021.1) to
 # prevent issues with other modules that rely on the primary
@@ -141,25 +140,25 @@ class HostDeviceMem(object):
 
 
 # Allocates all buffers required for an engine, i.e. host/device inputs/outputs.
-def allocate_buffers(engine):
-    inputs = []
-    outputs = []
-    bindings = []
-    stream = cuda.Stream()
-    for binding in engine:
-        size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
-        dtype = trt.nptype(engine.get_binding_dtype(binding))
-        # Allocate host and device buffers
-        host_mem = cuda.pagelocked_empty(size, dtype)
-        device_mem = cuda.mem_alloc(host_mem.nbytes)
-        # Append the device buffer to device bindings.
-        bindings.append(int(device_mem))
-        # Append to the appropriate list.
-        if engine.binding_is_input(binding):
-            inputs.append(HostDeviceMem(host_mem, device_mem))
-        else:
-            outputs.append(HostDeviceMem(host_mem, device_mem))
-    return inputs, outputs, bindings, stream
+# def allocate_buffers(engine):
+#     inputs = []
+#     outputs = []
+#     bindings = []
+#     stream = cuda.Stream()
+#     for binding in engine:
+#         size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
+#         dtype = trt.nptype(engine.get_binding_dtype(binding))
+#         # Allocate host and device buffers
+#         host_mem = cuda.pagelocked_empty(size, dtype)
+#         device_mem = cuda.mem_alloc(host_mem.nbytes)
+#         # Append the device buffer to device bindings.
+#         bindings.append(int(device_mem))
+#         # Append to the appropriate list.
+#         if engine.binding_is_input(binding):
+#             inputs.append(HostDeviceMem(host_mem, device_mem))
+#         else:
+#             outputs.append(HostDeviceMem(host_mem, device_mem))
+#     return inputs, outputs, bindings, stream
 
 
 # This function is generalized for multiple inputs/outputs.
@@ -193,9 +192,11 @@ def do_inference_v2(context, bindings, inputs, outputs, stream):
 
 
 class trt_model():
-    def __init__(self, engine, model_cfg):
+    def __init__(self, engine, model_cfg, device="cuda", mix=False):
         self.engine = engine
-        self.inputs, self.outputs, self.bindings, self.stream = allocate_buffers(engine)
+        self.stream = cuda.Stream()
+        self.bindings = [None] * self.engine.num_bindings
+        # self.inputs, self.outputs, self.bindings, self.stream = allocate_buffers(engine)
         self.context = engine.create_execution_context()
 
         nclass = model_cfg["model"]["arch"]["head"]["num_classes"]
@@ -208,10 +209,24 @@ class trt_model():
         for size in out_sizes:
             out_feature_dim += size
         self.output_shape = (1, int(out_feature_dim), out_cls_reg_dim)
+        self.output = torch.zeros(self.output_shape).to(device)
+        if mix:
+            self.output = self.output.half()
+        self.bindings[self.engine.get_binding_index('data')] = self.output.data_ptr()
 
     # def __call__(self, input):
     #     np.copyto(self.inputs[0].host, input)
-    def __call__(self, input):
+    def __call__(self, input):#, output):
+        import numpy as np
         # np.copyto(self.inputs[0].host, input)
-        preds = do_inference_v2(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream)
-        return preds[0].reshape(self.output_shape)
+        # self.inputs[0].host = input.data_ptr()
+        # preds = do_inference_v2(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream)
+        # return preds[0].reshape(self.output_shape)
+
+        # output = torch.zeros(self.output_shape).cuda()
+        # bindings = [None] * self.engine.num_bindings
+        self.bindings[self.engine.get_binding_index('output')] = input.data_ptr()
+
+        self.context.execute_async_v2(bindings=self.bindings)
+        print("done")
+        return self.output

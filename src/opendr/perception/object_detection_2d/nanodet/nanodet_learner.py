@@ -470,38 +470,43 @@ class NanodetLearner(Learner):
     def _save_trt(self, trt_path, verbose=True, conf_thresh=0.35,
                    iou_thresh=0.6, nms_max_num=100, mix=False, dataset=None):
 
-        if not self.predictor:
-            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
-                                       iou_thresh=iou_thresh, nms_max_num=nms_max_num)
-
+        trt_path = f"{trt_path}/prec16" if mix else f"{trt_path}/prec32"
         os.makedirs(trt_path, exist_ok=True)
+
         export_path = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.onnx")
+        # Hack for jetson tx2
+        if torch.__version__ != "1.9.0":
+            if not self.predictor:
+                self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
+                                           iou_thresh=iou_thresh, nms_max_num=nms_max_num)
 
-        dummy_input = self.__dummy_input()
+            dummy_input = self.__dummy_input()
 
-        torch.onnx.export(
-            self.predictor,
-            dummy_input[0],
-            export_path,
-            verbose=verbose,
-            keep_initializers_as_inputs=True,
-            do_constant_folding=False,
-            opset_version=11,
-            input_names=['data'],
-            output_names=['output'],
-        )
+            torch.onnx.export(
+                self.predictor,
+                dummy_input[0],
+                export_path,
+                export_params=True,
+                verbose=verbose,
+                do_constant_folding=True,
+                opset_version=11,
+                input_names=['data'],
+                output_names=['output'],
+            )
 
-        try:
-            import onnxsim
-            import onnx
+            try:
+                import onnxsim
+                import onnx
 
-            input_data = {"data": dummy_input[0].detach().cpu().numpy()}
-            model_sim, flag = onnxsim.simplify(export_path, input_data=input_data)
-            if flag:
-                onnx.save(model_sim, export_path)
-                print("ONNX simplified successfully.")
-        except ImportError as e:
-            print(f"{e}, will not run simplify")
+                input_data = {"data": dummy_input[0].detach().cpu().numpy()}
+                model_sim, flag = onnxsim.simplify(export_path, input_data=input_data)
+                if flag:
+                    onnx.save(model_sim, export_path)
+                    print("ONNX simplified successfully.")
+            except ImportError as e:
+                print(f"{e}, will not run simplify")
+            del dummy_input
+
 
         from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.utilities import Postprocessor
         postprocessor = Postprocessor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
@@ -510,6 +515,7 @@ class NanodetLearner(Learner):
             export_path_pth = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.pth")
             post_process_scripted = torch.jit.script(postprocessor)
             post_process_scripted.save(export_path_pth)
+            del post_process_scripted
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(TRT_LOGGER)
@@ -517,7 +523,12 @@ class NanodetLearner(Learner):
         network = builder.create_network(trt_dep.EXPLICIT_BATCH)
         config = builder.create_builder_config()
         if mix:
-            config.set_flag(trt.BuilderFlag.FP16)
+            # config.set_flag(trt.BuilderFlag.FP16)
+            config.flags |= 1 << int(trt.BuilderFlag.FP16)
+        # config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
+        # config.set_flag(trt.BuilderFlag.DIRECT_IO)
+        # config.set_flag(trt.BuilderFlag.REJECT_EMPTY_ALGORITHMS)
+        # config.set_flag(trt.BuilderFlag.SPARSE_WEIGHTS)
         parser = trt.OnnxParser(network, TRT_LOGGER)
         config.max_workspace_size = trt_dep.GiB(1)
         with open(export_path, "rb") as model:
@@ -536,7 +547,7 @@ class NanodetLearner(Learner):
                     "format": "tensorRT", "has_data": False, "optimized": True, "optimizer_info": {},
                     "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
                                          "num_classes": len(self.classes), "reg_max": self.cfg.model.arch.head.reg_max,
-                                         "strides": self.cfg.model.arch.head.strides}}
+                                         "strides": self.cfg.model.arch.head.strides}, "half_prec": mix}
 
         with open(f'{trt_path}/nanodet_{self.cfg.check_point_name}.json', 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
@@ -552,7 +563,7 @@ class NanodetLearner(Learner):
         with open(f'{trt_paths[0]}', 'rb') as f:
             engine_bytes = f.read()
             engine = runtime.deserialize_cuda_engine(engine_bytes)
-            self.trt_model = trt_dep.trt_model(engine, self.cfg)
+            self.trt_model = trt_dep.trt_model(engine, self.cfg, self.device)
 
         self.jit_postprocessing = torch.jit.load(trt_paths[1], map_location=self.device)
         return
@@ -639,18 +650,22 @@ class NanodetLearner(Learner):
                                nms_max_num=nms_max_num, mix=mix, dataset=dataset)
             else:
                 assert NotImplementedError
-        with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
-            metadata = json.load(f)
-        if optimization == "jit":
-            self._load_jit(os.path.join(export_path, metadata["model_paths"][0]), verbose)
-            self._load_only_jit(os.path.join(export_path, "trace", metadata["model_paths"][0]), verbose)
-        elif optimization == "onnx":
-            self._load_onnx(os.path.join(export_path, metadata["model_paths"][0]), verbose)
-        elif optimization == "trt":
-            metadata["model_paths"] = [os.path.join(export_path, path) for path in metadata["model_paths"]]
+        if optimization == "trt":
+            precision = "prec16" if mix else "prec32"
+            with open(os.path.join(export_path, precision, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
+                metadata = json.load(f)
+            metadata["model_paths"] = [os.path.join(export_path, precision, path) for path in metadata["model_paths"]]
             self._load_trt(metadata["model_paths"], verbose)
         else:
-            assert NotImplementedError
+            with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
+                metadata = json.load(f)
+            if optimization == "jit":
+                self._load_jit(os.path.join(export_path, metadata["model_paths"][0]), verbose)
+                self._load_only_jit(os.path.join(export_path, "trace", metadata["model_paths"][0]), verbose)
+            elif optimization == "onnx":
+                self._load_onnx(os.path.join(export_path, metadata["model_paths"][0]), verbose)
+            else:
+                assert NotImplementedError
         return
 
     def fit(self, dataset, val_dataset=None, logging_path='', verbose=True, logging=False, seed=123, local_rank=1):
@@ -857,8 +872,11 @@ class NanodetLearner(Learner):
                     "To run in TensorRT please delete the self.jit_model like: detector.jit_model = None.")
             res = self.jit_model(_input, *metadata)
         elif self.trt_model:
-            preds = self.trt_model(_input.cpu().detach().numpy().ravel())
-            res = self.predictor.postprocessing(torch.from_numpy(preds), _input, *metadata)
+            preds = self.trt_model(_input)#.cpu().detach().numpy().ravel())
+            # res = self.predictor.postprocessing(torch.from_numpy(preds), _input, *metadata)
+
+            # preds = self.trt_model(_input)
+            res = self.predictor.postprocessing(preds, _input, *metadata)
         else:
             preds = self.predictor(_input, *metadata)
             res = self.predictor.postprocessing(preds, _input, *metadata)
