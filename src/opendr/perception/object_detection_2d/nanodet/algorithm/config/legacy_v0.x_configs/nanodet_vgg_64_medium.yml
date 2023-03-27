@@ -6,7 +6,7 @@ model:
     name: OneStageDetector
     backbone:
       name: SmallVgg
-      out_stages: [4, 5] #[1, 2] #[2, 4]
+      out_stages: [3, 4] #[1, 2] #[2, 4]
       stages_inplanes:  [3, 8, 8, 8] #[3, 8] #[3, 8, 8, 6]
       stages_outplanes: [8, 8, 8, 8] #[8, 8] #[8, 8, 6, 6]
       stages_strides:   [1, 2, 2, 2] #[2,2] #[1, 2, 1, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
