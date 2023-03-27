@@ -192,11 +192,9 @@ def do_inference_v2(context, bindings, inputs, outputs, stream):
 
 
 class trt_model():
-    def __init__(self, engine, model_cfg, device="cuda", mix=False):
+    def __init__(self, engine, model_cfg, device="cuda"):
         self.engine = engine
-        self.stream = cuda.Stream()
         self.bindings = [None] * self.engine.num_bindings
-        # self.inputs, self.outputs, self.bindings, self.stream = allocate_buffers(engine)
         self.context = engine.create_execution_context()
 
         nclass = model_cfg["model"]["arch"]["head"]["num_classes"]
@@ -210,23 +208,9 @@ class trt_model():
             out_feature_dim += size
         self.output_shape = (1, int(out_feature_dim), out_cls_reg_dim)
         self.output = torch.zeros(self.output_shape).to(device)
-        if mix:
-            self.output = self.output.half()
-        self.bindings[self.engine.get_binding_index('data')] = self.output.data_ptr()
+        self.bindings[self.engine.get_binding_index('output')] = self.output.data_ptr()
 
-    # def __call__(self, input):
-    #     np.copyto(self.inputs[0].host, input)
-    def __call__(self, input):#, output):
-        import numpy as np
-        # np.copyto(self.inputs[0].host, input)
-        # self.inputs[0].host = input.data_ptr()
-        # preds = do_inference_v2(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream)
-        # return preds[0].reshape(self.output_shape)
-
-        # output = torch.zeros(self.output_shape).cuda()
-        # bindings = [None] * self.engine.num_bindings
-        self.bindings[self.engine.get_binding_index('output')] = input.data_ptr()
-
-        self.context.execute_async_v2(bindings=self.bindings)
-        print("done")
+    def __call__(self, input):
+        self.bindings[self.engine.get_binding_index('data')] = input.data_ptr()
+        self.context.execute_v2(bindings=self.bindings)
         return self.output

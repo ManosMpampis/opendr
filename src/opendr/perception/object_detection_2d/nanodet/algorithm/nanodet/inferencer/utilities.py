@@ -81,7 +81,7 @@ class Predictor(nn.Module):
         meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device)
         meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
 
-        _input = meta["img"]
+        _input = meta["img"].half().contiguous() if self.mix else meta["img"].contiguous()
         _height = torch.tensor(height)
         _width = torch.tensor(width)
         _warp_matrix = torch.from_numpy(meta["warp_matrix"])
@@ -96,13 +96,14 @@ class Predictor(nn.Module):
 
 
 class Postprocessor(nn.Module):
-    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, mix=True):
         super(Postprocessor, self).__init__()
         self.cfg = cfg
         self.device = device
         self.conf_thresh = conf_thresh
         self.iou_thresh = iou_thresh
         self.nms_max_num = nms_max_num
+        self.mix = mix
         if self.cfg.model.arch.backbone.name == "RepVGG":
             deploy_config = self.cfg.model
             deploy_config.arch.backbone.update({"deploy": True})
@@ -118,6 +119,8 @@ class Postprocessor(nn.Module):
 
     def forward(self, preds, input, height, width, warp_matrix):
         meta = {"height": height, "width": width, 'img': input, 'warp_matrix': warp_matrix}
+        if self.mix:
+            preds = preds.half()
         res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
                                            nms_max_num=self.nms_max_num)
         return res
