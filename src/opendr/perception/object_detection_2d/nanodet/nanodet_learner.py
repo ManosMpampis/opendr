@@ -758,6 +758,7 @@ class NanodetLearner(Learner):
             callbacks=[ProgressBar(refresh_rate=0)],
             logger=self.logger,
             benchmark=True,
+            precision=self.cfg.device.precision,
             gradient_clip_val=self.cfg.get("grad_clip", 0.0),
         )
 
@@ -824,6 +825,7 @@ class NanodetLearner(Learner):
             log_every_n_steps=self.cfg.log.interval,
             num_sanity_val_steps=0,
             logger=self.logger,
+            precision=self.cfg.device.precision,
         )
         if self.logger:
             self.logger.info("Starting testing...")
