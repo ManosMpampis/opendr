@@ -360,14 +360,16 @@ class ShapeTransform:
         if "gt_bboxes" in meta_data:
             boxes = get_jitter_boxes(meta_data["gt_bboxes"], self.jitter_box_ratio)
             boxes = warp_boxes(boxes, M, dst_shape[1], dst_shape[0])
-            boxes, classes = filter_bboxes(boxes, meta_data["gt_labels"], (dst_shape[1], dst_shape[0]))
+            boxes, labels = filter_bboxes(boxes, meta_data["gt_labels"], (dst_shape[1], dst_shape[0]))
             if len(boxes) == 0:
                 img = raw_img
                 M = np.eye(3)
                 boxes = meta_data["gt_bboxes"]
+                labels = meta_data["gt_labels"]
             if random.uniform(0, 1) < self.hard_pos:
                 img = get_hard_pos(img, boxes, self.hard_pos_ratio)
             meta_data["gt_bboxes"] = boxes
+            meta_data["gt_labels"] = labels
         if "gt_masks" in meta_data:
             for i, mask in enumerate(meta_data["gt_masks"]):
                 meta_data["gt_masks"][i] = cv2.warpPerspective(
