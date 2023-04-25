@@ -88,6 +88,17 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                     continue
                 return data
 
+    def __call__(self, idx):
+        if self.mode == "val" or self.mode == "test":
+            return self.get_val_data(idx)
+        else:
+            while True:
+                data = self.get_train_data(idx)
+                if data is None:
+                    idx = self.get_another_id()
+                    continue
+                return data
+
     @staticmethod
     def get_random_size(
         scale_range: Tuple[float, float], image_size: Tuple[int, int]
