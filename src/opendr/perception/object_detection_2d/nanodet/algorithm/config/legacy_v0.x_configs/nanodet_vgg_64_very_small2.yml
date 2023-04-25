@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/nanodet_vgg_64_very_small_with_augm_doulbe_size_padd_data
-check_point_name: vgg_64_very_small_with_augm_double_size_padd_data
+save_dir: ./temp/nanodet_vgg_64_very_small_doulbe_size_padd_data_bigger_lr
+check_point_name: vgg_64_very_small_doulbe_size_padd_data_bigger_lr
 model:
   arch:
     name: OneStageDetector
@@ -57,8 +57,8 @@ data:
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      scale: [0.9, 1.1]
-      stretch: [[0.9, 1.1], [0.9, 1.1]]
+      scale: [1.0, 1.0]
+      stretch: [[1.0, 1.0], [1.0, 1.0]]
       rotation: 0
       shear: 0
       translate: 0.0
@@ -66,9 +66,9 @@ data:
       jitter_box: 0.1
       hard_pos: 0.0
       hard_pos_ratio: 0.0
-      brightness: 0.2
-      contrast: [0.6, 1.4]
-      saturation: [0.5, 1.2]
+      brightness: 1.0
+      contrast: [1.0, 1.0]
+      saturation: [1.0, 1.0]
       normalize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
   val:
     input_size: [192, 192] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
@@ -92,7 +92,7 @@ schedule:
   optimizer:
     name: SGD
     lr: 0.01
-    momentum: 0.9
+    momentum: 0.99
     weight_decay: 0.05
   warmup:
     name: linear
