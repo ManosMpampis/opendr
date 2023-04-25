@@ -155,3 +155,37 @@ class XMLDataset(CocoDataset):
         self.img_ids = sorted(self.coco_api.imgs.keys())
         img_info = self.coco_api.loadImgs(self.img_ids)
         return img_info
+
+if __name__ == '__main__':
+    from opendr.perception.object_detection_2d.utils.vis_utils import draw_bounding_boxes
+    from opendr.engine.target import BoundingBox, BoundingBoxList
+    from opendr.engine.data import Image
+    import cv2
+
+    pipeline = {
+        "perspective": 0.0,
+        "normalize": [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
+    }
+    dataset_path = "/media/manos/hdd/Binary_Datasets/Football/"
+    dataset_metadata = {
+        "data_root": f"{dataset_path}/192x192_3pos_36neg_padded",
+        "classes": ["player"],
+        "dataset_type": "BINARY_FOOTBALL",
+    }
+    data_root = dataset_metadata["data_root"]
+    classes = dataset_metadata["classes"]
+    dataset_type = dataset_metadata["dataset_type"]
+    dataset = XMLDataset(img_path=f'{data_root}/test/images', ann_path=f'{data_root}/test/annotations',
+                         class_names=classes, input_size=(192, 192), pipeline=pipeline)
+
+    for i, meta_data in enumerate(dataset):
+        img = Image(meta_data["img"])
+        targets = []
+        for i in range(len(meta_data["gt_bboxes"])):
+            targets.append(BoundingBox(name=meta_data["gt_labels"][i], left=meta_data["gt_bboxes"][i][0], top=meta_data["gt_bboxes"][i][1],
+                                       width=meta_data["gt_bboxes"][i][2]-meta_data["gt_bboxes"][i][0], height=meta_data["gt_bboxes"][i][3]-meta_data["gt_bboxes"][i][1], score=1))
+        targets = BoundingBoxList(targets)
+        img = draw_bounding_boxes(img.opencv(), targets, class_names=dataset.class_names)
+        cv2.imshow('img', img)
+        cv2.waitKey(0)
+    cv2.destroyAllWindows()

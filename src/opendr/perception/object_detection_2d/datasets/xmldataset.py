@@ -112,3 +112,24 @@ class XMLBasedDataset(DetectionDataset):
         if self._target_transform is not None:
             boxes = self._target_transform(boxes)
         return boxes
+
+if __name__ == '__main__':
+    from opendr.perception.object_detection_2d.utils.vis_utils import draw_bounding_boxes
+
+    dataset_metadata = {
+        "data_root": "/media/manos/hdd/Binary_Datasets/Football/192x192_3pos_36neg_padded",
+        "classes": ["player"],
+        "dataset_type": "BINARY_FOOTBALL",
+    }
+    data_root = dataset_metadata["data_root"]
+    classes = dataset_metadata["classes"]
+    dataset_type = dataset_metadata["dataset_type"]
+    dataset = XMLBasedDataset(root=f'{data_root}/train', dataset_type=dataset_type, images_dir='images',
+                              annotations_dir='annotations', classes=classes)
+
+    for i, (img, targets) in enumerate(dataset):
+        img = img.opencv()
+        img = draw_bounding_boxes(img, targets, class_names=dataset.classes)
+        cv2.imshow('img', img)
+        cv2.waitKey(0)
+    cv2.destroyAllWindows()
