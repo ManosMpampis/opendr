@@ -16,28 +16,39 @@ import argparse
 from opendr.perception.object_detection_2d import NanodetLearner
 from opendr.engine.data import Image
 from opendr.perception.object_detection_2d import draw_bounding_boxes
-from opendr.engine.datasets import ExternalDataset
+from opendr.perception.object_detection_2d.datasets import XMLBasedDataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="m") # "vgg_64" "plus_m_320")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="vgg_64_very_small") # "vgg_64" "plus_m_320")
     parser.add_argument("--optimize", help="If specified will determine the optimization to be used (onnx, jit)",
                         type=str, default="", choices=["", "onnx", "jit", "trt"])
     parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.0001)
     parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.6)
-    parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=5)
+    parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=10)
     parser.add_argument("--show", help="do not show image", action="store_false")
     args = parser.parse_args()
 
     nanodet = NanodetLearner(model_to_use=args.model, device="cuda")
-    nanodet.load("./saved/nanodet_{}".format(args.model), verbose=True)
+    # nanodet.load("./saved/nanodet_{}".format(args.model), verbose=True)
+    nanodet.load(f"./saved/nanodet_vgg_64_very_small_with_augm_double_size", verbose=True)
 
-    img = Image.open("/media/manos/hdd/Binary_Datasets/Football/96x96_1pos_9neg/1image/images/NEW00000.bmp")
+    dataset_metadata = {
+        "data_root": "/media/manos/hdd/Binary_Datasets/Football/1920x1088_22pos_2040neg/bigres",
+        "classes": ["player"],
+        "dataset_type": "BINARY_FOOTBALL",
+    }
+    data_root = dataset_metadata["data_root"]
+    classes = dataset_metadata["classes"]
+    dataset_type = dataset_metadata["dataset_type"]
 
+    dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
+                              annotations_dir='annotations', classes=classes)
     if args.optimize != "":
-        nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize)
+        nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize, mix=False, new_load=False)
 
-    boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
-                          nms_max_num=args.nms, mix=False)
+    for (img, annotation) in dataset:
+        boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
+                              nms_max_num=args.nms, mix=False, big=True)
 
-    draw_bounding_boxes(img.opencv(), boxes, class_names=nanodet.classes, show=args.show)
+        draw_bounding_boxes(img.opencv(), boxes, class_names=nanodet.classes, show=args.show)
