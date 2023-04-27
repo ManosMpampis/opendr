@@ -217,7 +217,7 @@ def scriptable_warp_boxes(boxes, M, width, height):
 def filter_bboxes(boxes, classes, dst_shape, min_x=10, min_y=10, max_x=10, max_y=10):
     max_x, max_y = dst_shape[0] - max_x, dst_shape[1] - max_y
     filterd_boxes = np.empty([0, 4], dtype=np.float32)
-    filterd_classes = np.array([], dtype=np.float32)
+    filterd_classes = np.array([], dtype=np.int64)
     for box, box_class in zip(boxes, classes):
         if box[0] > max_x or box[1] > max_y or box[2] < min_x or box[3] < min_y:
             continue
