@@ -1,9 +1,0 @@
-{
-  "include": [
-    "Common.json",
-    "Map_10Cell.json",
-    "CMD_10Cell.json",
-    "CMD_EOS.json",
-    "Sensor_180Ray_2pi.json"
-  ]
-}
