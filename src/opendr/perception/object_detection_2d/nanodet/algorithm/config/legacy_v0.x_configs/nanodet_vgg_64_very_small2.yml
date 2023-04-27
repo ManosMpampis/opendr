@@ -101,7 +101,7 @@ schedule:
   total_epochs: 100
   lr_schedule:
     name: CosineAnnealingLR
-    T_max: 300
+    T_max: 400
     eta_min: 0.00005
     last_epoch: -1
   val_intervals: 2
