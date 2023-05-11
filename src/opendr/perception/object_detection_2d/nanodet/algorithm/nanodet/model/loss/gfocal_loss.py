@@ -6,7 +6,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.
 
 
 @weighted_loss
-def quality_focal_loss(pred, target, beta=2.0):
+def quality_focal_loss(pred, target, beta=2.0, cost_function=None):
     r"""Quality Focal Loss (QFL) is from `Generalized Focal Loss: Learning
     Qualified and Distributed Bounding Boxes for Dense Object Detection
     <https://arxiv.org/abs/2006.04388>`_.
@@ -19,7 +19,7 @@ def quality_focal_loss(pred, target, beta=2.0):
             and target quality label with shape (N,).
         beta (float): The beta parameter for calculating the modulating factor.
             Defaults to 2.0.
-
+        cost_function (str): The name of cost function, if None, defaults to cross entropy.
     Returns:
         torch.Tensor: Loss tensor with shape (N,).
     """
@@ -27,6 +27,9 @@ def quality_focal_loss(pred, target, beta=2.0):
         len(target) == 2
     ), """target for QFL must be a tuple of two elements,
         including category label and quality label, respectively"""
+    if (cost_function is not None) and (cost_function != "Cross") and (cost_function != "Hinge"):
+        raise NotImplementedError
+
     # label denotes the category id, score denotes the quality score
     label, score = target
 
@@ -34,9 +37,15 @@ def quality_focal_loss(pred, target, beta=2.0):
     pred_sigmoid = pred.sigmoid()
     scale_factor = pred_sigmoid
     zerolabel = scale_factor.new_zeros(pred.shape)
-    loss = F.binary_cross_entropy_with_logits(
-        pred, zerolabel, reduction="none"
-    ) * scale_factor.pow(beta)
+
+    if (cost_function is None) or (cost_function == "Cross"):
+        loss = F.binary_cross_entropy_with_logits(
+            pred, zerolabel, reduction="none"
+        ) * scale_factor.pow(beta)
+    elif cost_function == "Hinge":
+        loss = F.hinge_embedding_loss(
+            pred_sigmoid, zerolabel, reduction="none"
+        ) * scale_factor.pow(beta)
 
     # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
     bg_class_ind = pred.size(1)
@@ -46,9 +55,14 @@ def quality_focal_loss(pred, target, beta=2.0):
     pos_label = label[pos].long()
     # positives are supervised by bbox quality (IoU) score
     scale_factor = score[pos] - pred_sigmoid[pos, pos_label]
-    loss[pos, pos_label] = F.binary_cross_entropy_with_logits(
-        pred[pos, pos_label], score[pos], reduction="none"
-    ) * scale_factor.abs().pow(beta)
+    if (cost_function is None) or (cost_function == "Cross"):
+        loss[pos, pos_label] = F.binary_cross_entropy_with_logits(
+            pred[pos, pos_label], score[pos], reduction="none"
+        ) * scale_factor.abs().pow(beta)
+    elif cost_function == "Hinge":
+        loss[pos, pos_label] = F.hinge_embedding_loss(
+            pred_sigmoid[pos, pos_label], score[pos], reduction="none"
+        ) * scale_factor.abs().pow(beta)
 
     loss = loss.sum(dim=1, keepdim=False)
     return loss
@@ -66,7 +80,6 @@ def distribution_focal_loss(pred, label):
             integral set `{0, ..., n}` in paper.
         label (torch.Tensor): Target distance label for bounding boxes with
             shape (N,).
-
     Returns:
         torch.Tensor: Loss tensor with shape (N,).
     """
@@ -93,13 +106,14 @@ class QualityFocalLoss(nn.Module):
         loss_weight (float): Loss weight of current loss.
     """
 
-    def __init__(self, use_sigmoid=True, beta=2.0, reduction="mean", loss_weight=1.0):
+    def __init__(self, use_sigmoid=True, beta=2.0, reduction="mean", loss_weight=1.0, cost_function=None):
         super(QualityFocalLoss, self).__init__()
         assert use_sigmoid is True, "Only sigmoid in QFL supported now."
         self.use_sigmoid = use_sigmoid
         self.beta = beta
         self.reduction = reduction
         self.loss_weight = loss_weight
+        self.cost_function = cost_function
 
     @torch.jit.unused
     def forward(
@@ -131,6 +145,7 @@ class QualityFocalLoss(nn.Module):
                 beta=self.beta,
                 reduction=reduction,
                 avg_factor=avg_factor,
+                cost_function=self.cost_function,
             )
         else:
             raise NotImplementedError
@@ -175,6 +190,10 @@ class DistributionFocalLoss(nn.Module):
         assert reduction_override in (None, "none", "mean", "sum")
         reduction = reduction_override if reduction_override else self.reduction
         loss_cls = self.loss_weight * distribution_focal_loss(
-            pred, target, weight, reduction=reduction, avg_factor=avg_factor
+            pred,
+            target,
+            weight,
+            reduction=reduction,
+            avg_factor=avg_factor,
         )
         return loss_cls
