@@ -18,6 +18,7 @@ import copy
 import os
 import warnings
 from typing import Any, Dict, List
+import json
 
 import torch
 import torch.distributed as dist
@@ -191,6 +192,13 @@ class TrainingTask(LightningModule):
                 # self._save_current_model(self.local_rank, os.path.join(best_save_path, "nanodet_model_state_best.pth"),
                 #                          verbose=verbose)
                 self.save_current_model(os.path.join(best_save_path, "nanodet_model_state_best.pth"), verbose=verbose)
+                metadata = {"model_paths": ["nanodet_model_state_best.pth"], "framework": "pytorch", "format": "pth",
+                            "has_data": False,
+                            "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes},
+                            "optimized": False, "optimizer_info": {}}
+                with open(os.path.join(best_save_path, "nanodet_model_state_best.pth"), 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, ensure_ascii=False, indent=4)
+
                 txt_path = os.path.join(best_save_path, "eval_results.txt")
                 with open(txt_path, "a") as f:
                     f.write("Epoch:{}\n".format(self.current_epoch + 1))
