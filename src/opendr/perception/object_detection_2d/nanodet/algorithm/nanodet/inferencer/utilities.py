@@ -23,7 +23,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch 
 
 
 class Predictor(nn.Module):
-    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, mix=False):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, mix=False, mode="val"):
         super(Predictor, self).__init__()
         self.cfg = cfg
         self.device = device
@@ -44,7 +44,12 @@ class Predictor(nn.Module):
         for para in self.model.parameters():
             para.requires_grad = False
 
+        if mode != "val":
+            self.cfg.defrost()
+            self.cfg.data.val.input_size = [1920, 1088]
+            self.cfg.freeze()
         self.pipeline = Pipeline(self.cfg.data.val.pipeline, self.cfg.data.val.keep_ratio)
+
         self.traced_model = None
 
     def trace_model(self, dummy_input):
