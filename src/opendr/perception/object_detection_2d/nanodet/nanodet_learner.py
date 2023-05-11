@@ -837,7 +837,7 @@ class NanodetLearner(Learner):
         test_results = (verbose or logging)
         return trainer.test(self.task, val_dataloader, verbose=test_results)
 
-    def infer(self, input, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, mix=False, big=False):
+    def infer(self, input, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, mix=False, big=False, mode="val"):
         """
         Performs inference
         :param input: input image to perform inference on
@@ -853,7 +853,7 @@ class NanodetLearner(Learner):
         """
         if not self.predictor:
             self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, mix=mix)
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, mix=mix, mode=mode)
 
         if not isinstance(input, Image):
             input = Image(input)
