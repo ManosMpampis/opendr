@@ -83,10 +83,18 @@ class NanoDetPlusHead(nn.Module):
         self.assigner = DynamicSoftLabelAssigner(**assigner_cfg)
         self.distribution_project = Integral(self.reg_max)
 
-        self.loss_qfl = QualityFocalLoss(
-            beta=self.loss_cfg.loss_qfl.beta,
-            loss_weight=self.loss_cfg.loss_qfl.loss_weight,
-        )
+        try:
+            self.loss_qfl = QualityFocalLoss(
+                beta=self.loss_cfg.loss_qfl.beta,
+                loss_weight=self.loss_cfg.loss_qfl.loss_weight,
+                cost_function=self.loss_cfg.loss_qfl.cost_function,
+            )
+        except AttributeError:
+            self.loss_qfl = QualityFocalLoss(
+                beta=self.loss_cfg.loss_qfl.beta,
+                loss_weight=self.loss_cfg.loss_qfl.loss_weight
+            )
+
         self.loss_dfl = DistributionFocalLoss(
             loss_weight=self.loss_cfg.loss_dfl.loss_weight
         )
