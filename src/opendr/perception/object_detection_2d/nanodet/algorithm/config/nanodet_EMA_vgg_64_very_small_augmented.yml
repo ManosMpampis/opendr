@@ -1,7 +1,10 @@
 #Config File example
-save_dir: ./temp/augmented_data_bigger_pos
-check_point_name: augmented_data_bigger_pos
+save_dir: ./temp/weight_averager_augmented_data_bigger_pos_with_augmentations
+check_point_name: weight_averager_augmented_data_bigger_pos_with_augmentations
 model:
+  weight_averager:
+    name: ExpMovingAverager
+    decay: 0.9998
   arch:
     name: OneStageDetector
     backbone:
@@ -51,14 +54,27 @@ model:
         loss_bbox:
           name: GIoULoss
           loss_weight: 2.0
+    aux_head:
+      name: SimpleConvHead
+      num_classes: 1
+      input_channel: 12
+      feat_channels: 12
+      stacked_convs: 4
+      strides: [4, 8]
+      norm_cfg:
+        type: GN
+        num_groups: 4
+        requires_grad: True
+      activation: LeakyReLU
+      reg_max: 7
 data:
   train:
     input_size: [192, 192] #[w,h]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      scale: [1.0, 1.0]
-      stretch: [[1.0, 1.0], [1.0, 1.0]]
+      scale: [0.9, 1.1]
+      stretch: [[0.9, 1.1], [0.9, 1.1]]
       rotation: 0
       shear: 0
       translate: 0.0
@@ -66,9 +82,9 @@ data:
       jitter_box: 0.1
       hard_pos: 0.0
       hard_pos_ratio: 0.0
-      brightness: 1.0
-      contrast: [1.0, 1.0]
-      saturation: [1.0, 1.0]
+      brightness: 0.2
+      contrast: [0.6, 1.4]
+      saturation: [0.5, 1.2]
       normalize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
   val:
     input_size: [192, 192] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
@@ -92,7 +108,7 @@ schedule:
   optimizer:
     name: SGD
     lr: 0.01
-    momentum: 0.99
+    momentum: 0.9
     weight_decay: 0.05
   warmup:
     name: linear

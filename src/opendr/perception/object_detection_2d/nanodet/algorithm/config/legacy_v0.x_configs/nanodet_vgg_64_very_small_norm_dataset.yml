@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/augmented_data_bigger_pos
-check_point_name: augmented_data_bigger_pos
+save_dir: ./temp/norm_data
+check_point_name: norm_data
 model:
   arch:
     name: OneStageDetector
