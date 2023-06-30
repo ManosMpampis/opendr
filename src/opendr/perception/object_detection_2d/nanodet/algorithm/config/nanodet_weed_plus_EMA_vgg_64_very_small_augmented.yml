@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/plus_weight_averager_augmented
-check_point_name: plus_weight_averager_augmented
+save_dir: ./temp/plus_weight_averager_augmented_data_bigger_pos_with_augmentations
+check_point_name: plus_weight_averager_augmented_data_bigger_pos_with_augmentations
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -56,7 +56,7 @@ model:
           loss_weight: 2.0
 data:
   train:
-    input_size: [412, 412] #[w,h]
+    input_size: [1920, 1088] #[w,h]
     keep_ratio: False
     pipeline:
       perspective: 0.0
@@ -72,24 +72,24 @@ data:
       brightness: 0.2
       contrast: [0.6, 1.4]
       saturation: [0.5, 1.2]
-      normalize: [[99.24, 104.99, 99.6], [34.54, 30.48, 29.46]]
+      normalize: [[96.04, 101.39, 94.85], [36.38, 32.02, 30.28]]
   val:
-    input_size: [412, 412] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
+    input_size: [1920, 1088] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      normalize: [[99.24, 104.99, 99.6], [34.54, 30.48, 29.46]]
+      normalize: [[96.04, 101.39, 94.85], [36.38, 32.02, 30.28]]
   bench_test:
     input_size: [1920, 1088]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      normilize: [[99.24, 104.99, 99.6], [34.54, 30.48, 29.46]]
+      normilize: [[96.04, 101.39, 94.85], [36.38, 32.02, 30.28]]
 device:
   gpu_ids: [0]
   workers_per_gpu: 8
   batchsize_per_gpu: 256
-  precision: 32
+  precision: 16
 schedule:
   resume: 0
   optimizer:
@@ -104,7 +104,7 @@ schedule:
   total_epochs: 100
   lr_schedule:
     name: CosineAnnealingLR
-    T_max: 400
+    T_max: 500
     eta_min: 0.00005
     last_epoch: -1
   val_intervals: 2
@@ -115,4 +115,3 @@ log:
   interval: 10
 
 class_names: ['weed']
-#class_names: ['player']

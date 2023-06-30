@@ -68,7 +68,6 @@ class NanodetLearner(Learner):
                  warmup_ratio=None, lr_schedule_T_max=None, lr_schedule_eta_min=None, grad_clip=None, model_log_name=None):
 
         """Initialise the Nanodet Learner"""
-
         self.cfg = self._load_hparam(model_to_use)
         self.lr_schedule_T_max = lr_schedule_T_max
         self.lr_schedule_eta_min = lr_schedule_eta_min
@@ -762,6 +761,7 @@ class NanodetLearner(Learner):
             benchmark=True,
             precision=self.cfg.device.precision,
             gradient_clip_val=self.cfg.get("grad_clip", 0.0),
+            move_metrics_to_cpu=True
         )
 
         trainer.fit(self.task, train_dataloader, val_dataloader)

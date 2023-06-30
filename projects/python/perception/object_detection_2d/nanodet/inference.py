@@ -32,8 +32,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     nanodet = NanodetLearner(model_to_use=args.model, device="cuda")
-    # nanodet.load("./saved/nanodet_{}".format(args.model), verbose=True)
-    # nanodet.load(f"./saved/nanodet_vgg_64_very_small_with_augm_double_size", verbose=True)
 
     save_path = f"./temp/{nanodet.cfg.check_point_name}/model_best/"
     nanodet.cfg.defrost()
@@ -41,7 +39,8 @@ if __name__ == '__main__':
     nanodet.cfg.freeze()
     nanodet.load(save_path, verbose=True)
     dataset_metadata = {
-        "data_root": "/media/manos/hdd/Binary_Datasets/Football/1920x1088_22pos_2040neg/bigres",
+        "data_root": "/media/manos/hdd/Binary_Datasets/Football/1920x1088_22pos_2040negrand_neg_padded_augmented_size_0.9-2.0",
+        # "data_root": "/media/manos/hdd/Binary_Datasets/Football/1920x1088_22pos_2040neg_padded_augmented_size_0.9-2.0",
         "classes": ["player"],
         "dataset_type": "BINARY_FOOTBALL",
     }

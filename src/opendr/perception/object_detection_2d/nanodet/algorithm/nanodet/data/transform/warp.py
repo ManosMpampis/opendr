@@ -359,8 +359,8 @@ class ShapeTransform:
         img = cv2.warpPerspective(raw_img, M, dsize=tuple(dst_shape))
         if "gt_bboxes" in meta_data:
             boxes = get_jitter_boxes(meta_data["gt_bboxes"], self.jitter_box_ratio)
-            boxes = warp_boxes(boxes, M, dst_shape[1], dst_shape[0])
-            boxes, labels = filter_bboxes(boxes, meta_data["gt_labels"], (dst_shape[1], dst_shape[0]))
+            boxes = warp_boxes(boxes, M, dst_shape[0], dst_shape[1])
+            boxes, labels = filter_bboxes(boxes, meta_data["gt_labels"], (dst_shape[0], dst_shape[1]))
             if len(boxes) == 0:
                 img = raw_img
                 M = np.eye(3)

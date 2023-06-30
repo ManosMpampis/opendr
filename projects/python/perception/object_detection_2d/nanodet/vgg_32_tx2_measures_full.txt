@@ -1,0 +1,369 @@
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_medium Half precision: False
+
+=== Python measurements === 
+preprocessing  fps = 6.272190618604383 evn/s
+infer          fps = 12.55448521075225 evn/s
+postprocessing fps = 38.90075723226617 evn/s
+infer + postpr fps = 9.610286927193398 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 6.272190618604383 evn/s
+infer          fps = 12.510431872611143 evn/s
+postprocessing fps = 42.01718858946056 evn/s
+infer + postpr fps = 9.650497688925121 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 6.272190618604383 evn/s
+infer          fps = 17.38414430134078 evn/s
+postprocessing fps = 42.01718858946056 evn/s
+infer + postpr fps = 11.911161212734049 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.009791596249163039
+std infer: 0.00048487280522948976
+std post: 0.0008482187872541539
+std infer post: 0.0006630617020303839
+std JIT infer: 0.00030702810276427456
+std JIT infer+post: 0.0006366622357675503
+std trt infer: 0.0005110659132334945
+std trt post : 0.0007907045251515125
+std trt infer post: 0.0016787587060261317
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_medium_conv Half precision: False
+
+=== Python measurements === 
+preprocessing  fps = 7.109562681262123 evn/s
+infer          fps = 11.718299364097474 evn/s
+postprocessing fps = 38.966522646299104 evn/s
+infer + postpr fps = 9.091107709562502 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 7.109562681262123 evn/s
+infer          fps = 11.697012522409425 evn/s
+postprocessing fps = 41.88582116717136 evn/s
+infer + postpr fps = 9.156895856460174 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 7.109562681262123 evn/s
+infer          fps = 17.410941669899227 evn/s
+postprocessing fps = 41.88582116717136 evn/s
+infer + postpr fps = 11.836880354847128 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.004603996831008014
+std infer: 0.0007050311073052192
+std post: 0.0009389049874913485
+std infer post: 0.0009867687960003876
+std JIT infer: 0.00042014835561440936
+std JIT infer+post: 0.000688777754072532
+std trt infer: 0.0008944093921509632
+std trt post : 0.0005958039103377064
+std trt infer post: 0.001085779779147844
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_small Half precision: False
+
+=== Python measurements === 
+preprocessing  fps = 3.250806598848499 evn/s
+infer          fps = 24.921548477800833 evn/s
+postprocessing fps = 41.044782499425224 evn/s
+infer + postpr fps = 16.177870394076404 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 3.250806598848499 evn/s
+infer          fps = 25.432399864951932 evn/s
+postprocessing fps = 43.86769451583779 evn/s
+infer + postpr fps = 16.21032967968974 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 3.250806598848499 evn/s
+infer          fps = 33.13257706809832 evn/s
+postprocessing fps = 43.86769451583779 evn/s
+infer + postpr fps = 17.515237641089513 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.3974816479038773
+std infer: 0.00026953786969178384
+std post: 0.0006788593902634397
+std infer post: 0.0007482674899381977
+std JIT infer: 0.00020699092783269335
+std JIT infer+post: 0.0005945359904441783
+std trt infer: 0.00018600927277287994
+std trt post : 0.0008343822709026451
+std trt infer post: 0.0011257854109183397
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_small_conv Half precision: False
+
+=== Python measurements === 
+preprocessing  fps = 7.260770753302097 evn/s
+infer          fps = 24.50718434502775 evn/s
+postprocessing fps = 39.69582329524698 evn/s
+infer + postpr fps = 16.0243453798403 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 7.260770753302097 evn/s
+infer          fps = 25.04669591904753 evn/s
+postprocessing fps = 42.2373870974068 evn/s
+infer + postpr fps = 15.924777494169682 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 7.260770753302097 evn/s
+infer          fps = 33.422964209558096 evn/s
+postprocessing fps = 42.2373870974068 evn/s
+infer + postpr fps = 17.66675187248708 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.0019403629856946526
+std infer: 0.0003325561474244447
+std post: 0.0010178708534108502
+std infer post: 0.0007391481281782348
+std JIT infer: 0.00021966663382505988
+std JIT infer+post: 0.0007909773709673174
+std trt infer: 0.000272506403828835
+std trt post : 0.0009442428060348466
+std trt infer post: 0.0010799298217179392
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_very_small Half precision: False
+
+=== Python measurements === 
+preprocessing  fps = 7.136525886956955 evn/s
+infer          fps = 27.512066644741502 evn/s
+postprocessing fps = 56.323953390672955 evn/s
+infer + postpr fps = 19.308294697422273 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 7.136525886956955 evn/s
+infer          fps = 28.431607587404947 evn/s
+postprocessing fps = 50.39530825735653 evn/s
+infer + postpr fps = 19.252429706292265 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 7.136525886956955 evn/s
+infer          fps = 38.0054250882033 evn/s
+postprocessing fps = 50.39530825735653 evn/s
+infer + postpr fps = 20.464427016326724 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.00046309044143958073
+std infer: 0.00032067662271850165
+std post: 0.00111739713225735
+std infer post: 0.0007010645448817037
+std JIT infer: 0.00020920334577577407
+std JIT infer+post: 0.0006427074855048358
+std trt infer: 0.0002854899133393486
+std trt post : 0.0006089307605609706
+std trt infer post: 0.0011755099122649178
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_very_small Half precision: False
+
+=== Python measurements === 
+preprocessing  fps = 4.566277930360358 evn/s
+infer          fps = 27.331461518663033 evn/s
+postprocessing fps = 51.601030415013255 evn/s
+infer + postpr fps = 18.868270482687546 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 4.566277930360358 evn/s
+infer          fps = 28.02924000463454 evn/s
+postprocessing fps = 50.331988451861385 evn/s
+infer + postpr fps = 18.898324880398288 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 4.566277930360358 evn/s
+infer          fps = 38.401863265454814 evn/s
+postprocessing fps = 50.331988451861385 evn/s
+infer + postpr fps = 20.51528415931034 env/s
+
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.0792823725844385
+std infer: 0.00033517972974462254
+std post: 0.0010612360498735956
+std infer post: 0.0010776810092010018
+std JIT infer: 0.000211400920829906
+std JIT infer+post: 0.0007026479365143596
+std trt infer: 0.0002929091866430592
+std trt post : 0.0005313149205674034
+std trt infer post: 0.0010894700775956527
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_small Half precision: True
+
+=== Python measurements === 
+preprocessing  fps = 7.160662066858406 evn/s
+infer          fps = 24.88555546622063 evn/s
+postprocessing fps = 38.903247576910374 evn/s
+infer + postpr fps = 16.258539441770537 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 7.160662066858406 evn/s
+infer          fps = 24.94644322501203 evn/s
+postprocessing fps = 42.2655605279724 evn/s
+infer + postpr fps = 16.056103971912368 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 7.160662066858406 evn/s
+infer          fps = 33.633674001715086 evn/s
+postprocessing fps = 42.2655605279724 evn/s
+infer + postpr fps = 17.45457745417637 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.0013252512006543087
+std infer: 0.00034327948368053827
+std post: 0.0010611338732788378
+std infer post: 0.0010816616676535256
+std JIT infer: 0.00024112538290803516
+std JIT infer+post: 0.0007676565390829345
+std trt infer: 0.00022065802303545079
+std trt post : 0.001048802808974078
+std trt infer post: 0.0010018561888712819
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_small_conv Half precision: True
+
+=== Python measurements === 
+preprocessing  fps = 6.999995132725345 evn/s
+infer          fps = 23.778611671081155 evn/s
+postprocessing fps = 38.834072261353974 evn/s
+infer + postpr fps = 15.711688060743157 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 6.999995132725345 evn/s
+infer          fps = 23.40138463575198 evn/s
+postprocessing fps = 42.37896621672958 evn/s
+infer + postpr fps = 15.508312003800947 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 6.999995132725345 evn/s
+infer          fps = 33.94114901538444 evn/s
+postprocessing fps = 42.37896621672958 evn/s
+infer + postpr fps = 17.543644745273117 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.0022103900440362013
+std infer: 0.0003518630548786624
+std post: 0.0011124304994089116
+std infer post: 0.0007114273089164106
+std JIT infer: 0.00017673355601943437
+std JIT infer+post: 0.0006415582991572308
+std trt infer: 0.0002587341562958614
+std trt post : 0.0010649066358757715
+std trt infer post: 0.0011188290477576368
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_very_small Half precision: True
+
+=== Python measurements === 
+preprocessing  fps = 6.971663241315535 evn/s
+infer          fps = 28.707325741738934 evn/s
+postprocessing fps = 50.478177419478946 evn/s
+infer + postpr fps = 19.471698721057304 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 6.971663241315535 evn/s
+infer          fps = 28.788678834188964 evn/s
+postprocessing fps = 50.41381444503337 evn/s
+infer + postpr fps = 19.634955343821144 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 6.971663241315535 evn/s
+infer          fps = 38.31164215122668 evn/s
+postprocessing fps = 50.41381444503337 evn/s
+infer + postpr fps = 20.508155061876156 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.0035510408816200123
+std infer: 0.0003978073589087794
+std post: 0.0007999401608496756
+std infer post: 0.000989177291698705
+std JIT infer: 0.00025262730729490193
+std JIT infer+post: 0.0006588713655682451
+std trt infer: 0.00021696361409007298
+std trt post : 0.0006296388788219715
+std trt infer post: 0.0014847857301578048
+Finish initialize NanoDet-Plus Head.
+
+
+Measure of model: vgg_64_very_small Half precision: True
+
+=== Python measurements === 
+preprocessing  fps = 6.975611664877441 evn/s
+infer          fps = 27.6892528724843 evn/s
+postprocessing fps = 50.824468210428115 evn/s
+infer + postpr fps = 19.295976524855384 evn/s
+
+
+=== JIT measurements === 
+preprocessing  fps = 6.975611664877441 evn/s
+infer          fps = 27.5723545287053 evn/s
+postprocessing fps = 50.5949318700192 evn/s
+infer + postpr fps = 18.96233888504762 evn/s
+
+
+=== TRT measurements === 
+preprocessing  fps = 6.975611664877441 evn/s
+infer          fps = 38.719960998167224 evn/s
+postprocessing fps = 50.5949318700192 evn/s
+infer + postpr fps = 20.461779778129586 env/s
+
+
+++++++ STD OF TIMES ++++++
+std pre: 0.0012446295741853546
+std infer: 0.0003669212921613174
+std post: 0.0008983497809058009
+std infer post: 0.0005818064563979483
+std JIT infer: 0.00019588646080512408
+std JIT infer+post: 0.0007835089016656647
+std trt infer: 0.00023788532876704415
+std trt post : 0.0007754671899997446
+std trt infer post: 0.001330219926667884

@@ -116,20 +116,38 @@ class XMLBasedDataset(DetectionDataset):
 if __name__ == '__main__':
     from opendr.perception.object_detection_2d.utils.vis_utils import draw_bounding_boxes
 
+    # dataset_metadata = {
+    #     "data_root": "/media/manos/hdd/Binary_Datasets/Football/192x192_3pos_36neg_padded_augmented",
+    #     "classes": ["player"],
+    #     "dataset_type": "BINARY_FOOTBALL",
+    # }
     dataset_metadata = {
-        "data_root": "/media/manos/hdd/Binary_Datasets/Football/192x192_3pos_36neg_padded",
-        "classes": ["player"],
-        "dataset_type": "BINARY_FOOTBALL",
+        "data_root": "/media/manos/hdd/allea_datasets/weedDataset/1080p",
+        "classes": [],
+        "dataset_type": "",
     }
     data_root = dataset_metadata["data_root"]
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
-    dataset = XMLBasedDataset(root=f'{data_root}/train', dataset_type=dataset_type, images_dir='images',
+    dataset = XMLBasedDataset(root=f'{data_root}/eval/small_images', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
 
     for i, (img, targets) in enumerate(dataset):
+        sum = 0
+        for target in targets:
+            target_list = [target.left, target.top, target.width, target.height]
+            for coordinate in target_list:
+                if coordinate < 0:
+                    sum += 1
+                    print(target_list)
+        if sum > 0:
+            print(f"found in: {dataset.image_paths[i]}")
+        continue
+
+        # if dataset.image_paths[i] == "0_94c29a7cb6e9938a6501.jpg":
         img = img.opencv()
         img = draw_bounding_boxes(img, targets, class_names=dataset.classes)
+        img = cv2.resize(img, dsize=None, fx=0.9, fy=0.9)
         cv2.imshow('img', img)
         cv2.waitKey(0)
     cv2.destroyAllWindows()

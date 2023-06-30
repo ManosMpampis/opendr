@@ -43,6 +43,7 @@ class TrainingTask(LightningModule):
     def __init__(self, cfg, model, evaluator=None):
         super(TrainingTask, self).__init__()
         self.cfg = cfg
+        self.classes = cfg.class_names
         self.model = model
         self.evaluator = evaluator
         self.save_flag = -10
@@ -107,7 +108,6 @@ class TrainingTask(LightningModule):
                 )
             if self.logger:
                 self.logger.info(log_msg)
-                # self.text_summary("Train_Epoch", log_msg, self.global_step % 20)
 
         return loss
 
