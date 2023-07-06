@@ -9,9 +9,9 @@ export LD_LIBRARY_PATH=$OPENDR_HOME/lib:$LD_LIBRARY_PATH
 export DIR_PATH=/media/manos/hdd/allea_datasets/weedDataset
 export DATA_FOLDER=1080p
 
-
-python3 ./train.py --batch-size 128 --lr 0.0005 --n-epochs 500 --checkpoint-freq 5 --resume-from 0 --model plus_EMA_vgg_64_very_small_augmented --dataset_path $DIR_PATH/$DATA_FOLDER
-python3 ./train.py --batch-size 128 --lr 0.0005 --n-epochs 500 --checkpoint-freq 5 --resume-from 0 --model plus_EMA_vgg_64_very_small --dataset_path $DIR_PATH/$DATA_FOLDER
+python3 ./train.py --batch-size 128 --lr 0.001 --n-epochs 500 --checkpoint-freq 5 --resume-from 0 --model g --dataset_path $DIR_PATH/$DATA_FOLDER
+#python3 ./train.py --batch-size 256 --lr 0.002 --n-epochs 500 --checkpoint-freq 5 --resume-from 60 --model plus_EMA_vgg_64_very_small_augmented --dataset_path $DIR_PATH/$DATA_FOLDER
+#python3 ./train.py --batch-size 256 --lr 0.002 --n-epochs 500 --checkpoint-freq 5 --resume-from 0 --model plus_EMA_vgg_64_very_small --dataset_path $DIR_PATH/$DATA_FOLDER
 
 #python3 ./train.py --batch-size 512 --lr 0.002 --n-epochs 500 --checkpoint-freq 5 --resume-from 0 --model plus_EMA_vgg_64_very_small_augmented --dataset_path $DIR_PATH/$DATA_FOLDER
 #python3 ./train.py --batch-size 512 --lr 0.002 --n-epochs 500 --checkpoint-freq 5 --resume-from 0 --model plus_EMA_vgg_64_very_small --dataset_path $DIR_PATH/$DATA_FOLDER

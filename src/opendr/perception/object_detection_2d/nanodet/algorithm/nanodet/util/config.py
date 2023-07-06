@@ -13,6 +13,7 @@ cfg.model.arch.head = CfgNode(new_allowed=True)
 cfg.data = CfgNode(new_allowed=True)
 cfg.data.train = CfgNode(new_allowed=True)
 cfg.data.val = CfgNode(new_allowed=True)
+cfg.data.bench_test = CfgNode(new_allowed=True)
 cfg.device = CfgNode(new_allowed=True)
 cfg.device.precision = 32
 # train

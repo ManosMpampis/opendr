@@ -53,7 +53,7 @@ model:
           loss_weight: 2.0
 data:
   train:
-    input_size: [73,73] #[416,416] #[w,h]
+    input_size: [91, 91] #[416,416] #[w,h]
     keep_ratio: True
     pipeline:
       perspective: 0.0
@@ -68,13 +68,13 @@ data:
       saturation: [0.5, 1.2]
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   val:
-    input_size: [73,73] #[w,h]  [2.65, 2.61]
+    input_size: [91, 91] #[w,h]  [2.65, 2.61]
     keep_ratio: True
     pipeline:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
 device:
   gpu_ids: [0]
-  workers_per_gpu: 8
+  workers_per_gpu: 4
   batchsize_per_gpu: 1
   precision: 16
 schedule:
@@ -90,15 +90,21 @@ schedule:
     ratio: 0.0001
   total_epochs: 100
   lr_schedule:
-    name: CosineAnnealingLR
-    T_max: 400
-    eta_min: 0.00005
+    name: LinearLR
+    start_factor: 1
+    end_factor: 1
+    total_iters: 1
     last_epoch: -1
-  val_intervals: 2
+    verbose: False
+#    name: CosineAnnealingLR
+#    T_max: 400
+#    eta_min: 0.00005
+#    last_epoch: -1
 evaluator:
   name: CocoDetectionEvaluator
   save_key: mAP
 log:
   interval: 10
 
-class_names: ['player']
+class_names: ['wedd']
+#class_names: ['player']

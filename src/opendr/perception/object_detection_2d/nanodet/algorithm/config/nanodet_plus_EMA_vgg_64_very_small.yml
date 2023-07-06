@@ -89,7 +89,7 @@ device:
   gpu_ids: [0]
   workers_per_gpu: 8
   batchsize_per_gpu: 256
-  precision: 32
+  precision: 16
 schedule:
   resume: 0
   optimizer:
@@ -103,10 +103,16 @@ schedule:
     ratio: 0.0001
   total_epochs: 100
   lr_schedule:
-    name: CosineAnnealingLR
-    T_max: 400
-    eta_min: 0.00005
+    name: LinearLR
+    start_factor: 1
+    end_factor: 1
+    total_iters: 1
     last_epoch: -1
+    verbose: False
+#    name: CosineAnnealingLR
+#    T_max: 400
+#    eta_min: 0.00005
+#    last_epoch: -1
   val_intervals: 2
 evaluator:
   name: CocoDetectionEvaluator
