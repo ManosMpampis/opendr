@@ -17,7 +17,9 @@
 
 import argparse
 import os
+from collections import OrderedDict, namedtuple
 import torch
+import numpy as np
 
 # Use autoprimaryctx if available (pycuda >= 2021.1) to
 # prevent issues with other modules that rely on the primary
@@ -193,24 +195,68 @@ def do_inference_v2(context, bindings, inputs, outputs, stream):
 
 class trt_model():
     def __init__(self, engine, model_cfg, device="cuda"):
+        self.device = device
         self.engine = engine
-        self.bindings = [None] * self.engine.num_bindings
         self.context = engine.create_execution_context()
 
-        nclass = model_cfg["model"]["arch"]["head"]["num_classes"]
-        reg = model_cfg["model"]["arch"]["head"]["reg_max"]
-        out_cls_reg_dim = nclass + ((reg + 1)*4)
-        input_size = model_cfg["data"]["bench_test"]["input_size"]
-        strides = model_cfg["model"]["arch"]["head"]["strides"]
-        out_sizes = [(input_size[0]/stride)*(input_size[1]/stride) for stride in strides]
-        out_feature_dim = 0
-        for size in out_sizes:
-            out_feature_dim += size
-        self.output_shape = (1, int(out_feature_dim), out_cls_reg_dim)
-        self.output = torch.zeros(self.output_shape).to(device)
-        self.bindings[self.engine.get_binding_index('output')] = self.output.data_ptr()
+        self.bindings = OrderedDict()
+        Binding = namedtuple('Binding', ('name', 'dtype', 'shape', 'data', 'ptr'))
+        self.output_names = []
+        self.fp16 = False
+        self.dynamic = False
+        for i in range(self.engine.num_bindings):
+            name = self.engine.get_binding_name(i)
+            dtype = trt.nptype(self.engine.get_binding_dtype(i))
+            if self.engine.binding_is_input(i):
+                if -1 in tuple(self.engine.get_binding_shape(i)):  # dynamic
+                    self.dynamic = True
+                    self.context.set_binding_shape(i, tuple(self.engine.get_profile_shape(0, i)[2]))
+                if dtype == np.float16:
+                    self.fp16 = True
+            else:  # output
+                self.output_names.append(name)
+            shape = tuple(self.context.get_binding_shape(i))
+            im = torch.from_numpy(np.empty(shape, dtype=dtype)).to(device)
+            self.bindings[name] = Binding(name, dtype, shape, im, int(im.data_ptr()))
+        self.binding_addrs = OrderedDict((n, d.ptr) for n, d in self.bindings.items())
+        self.batch_size = self.bindings['data'].shape[0]  # if dynamic, this is instead max batch size
+
+        # self.bindings = [None] * self.engine.num_bindings
+        #
+        # nclass = model_cfg["model"]["arch"]["head"]["num_classes"]
+        # reg = model_cfg["model"]["arch"]["head"]["reg_max"]
+        # out_cls_reg_dim = nclass + ((reg + 1)*4)
+        # input_size = model_cfg["data"]["bench_test"]["input_size"]
+        # strides = model_cfg["model"]["arch"]["head"]["strides"]
+        # out_sizes = [(input_size[0]/stride)*(input_size[1]/stride) for stride in strides]
+        # out_feature_dim = 0
+        # for size in out_sizes:
+        #     out_feature_dim += size
+        # self.output_shape = (1, int(out_feature_dim), out_cls_reg_dim)
+        # self.output = torch.zeros(self.output_shape).to(device)
+        # self.bindings[self.engine.get_binding_index('output')] = self.output.data_ptr()
 
     def __call__(self, input):
-        self.bindings[self.engine.get_binding_index('data')] = input.data_ptr()
-        self.context.execute_v2(bindings=self.bindings)
-        return self.output
+        input = input.to(memory_format=torch.contiguous_format)  # maybe slows down (check)
+        if self.dynamic and input.shape != self.bindings['data'].shape:
+            i = self.engine.get_binding_index('data')
+            self.context.set_binding_shape(i, input.shape)  # reshape if dynamic
+            self.bindings['data'] = self.bindings['data']._replace(shape=input.shape)
+            for name in self.output_names:
+                i = self.engine.get_binding_index(name)
+                self.bindings[name].data.resize_(tuple(self.context.get_binding_shape(i)))
+        s = self.bindings['data'].shape
+        assert input.shape == s, f"input size {input.shape} not equal to max model size {s}"
+        self.binding_addrs['data'] = int(input.data_ptr())
+        self.context.execute_v2(list(self.binding_addrs.values()))
+        y = [self.bindings[x].data for x in sorted(self.output_names)]
+        if isinstance(y, (list, tuple)):
+            return self.from_numpy(y[0]) if len(y) == 1 else [self.from_numpy(x) for x in y]
+        else:
+            return self.from_numpy(y)
+        # self.bindings[self.engine.get_binding_index('data')] = input.data_ptr()
+        # self.context.execute_v2(bindings=self.bindings)
+        # return self.output
+
+    def from_numpy(self, x):
+        return torch.from_numpy(x).to(self.device) if isinstance(x, np.ndarray) else x

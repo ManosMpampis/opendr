@@ -22,24 +22,24 @@ import cv2
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="plus_EMA_vgg_64_very_small_augmented")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="test")
     parser.add_argument("--optimize", help="If specified will determine the optimization to be used (onnx, jit)",
                         type=str, default="", choices=["", "onnx", "jit", "trt"])
-    parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.1)
-    parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.8)
+    parser.add_argument("--conf-threshold", help="Determines the confident threshold", type=float, default=0.4)
+    parser.add_argument("--iou-threshold", help="Determines the iou threshold", type=float, default=0.6)
     parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=30)
     parser.add_argument("--show", help="do not show image", action="store_false")
     args = parser.parse_args()
 
-    nanodet = NanodetLearner(model_to_use=args.model, device="cuda")
+    nanodet = NanodetLearner(model_to_use=args.model, device="cuda", model_log_name=args.model)
 
-    save_path = f"./temp/{nanodet.cfg.check_point_name}/model_best/"
+    save_path = f"{nanodet.cfg.save_dir}/model_best/"
     nanodet.cfg.defrost()
     nanodet.cfg.check_point_name = "model_state_best"
     nanodet.cfg.freeze()
     nanodet.load(save_path, verbose=True)
     dataset_metadata = {
-        "data_root": "/media/manos/hdd/Binary_Datasets/Football/1920x1088_22pos_2040negrand_neg_padded_augmented_size_0.9-2.0",
+        "data_root": "/media/manos/hdd/Binary_Datasets/Football/192x192_2pos_36neg",
         # "data_root": "/media/manos/hdd/Binary_Datasets/Football/1920x1088_22pos_2040neg_padded_augmented_size_0.9-2.0",
         "classes": ["player"],
         "dataset_type": "BINARY_FOOTBALL",
@@ -48,15 +48,17 @@ if __name__ == '__main__':
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
 
-    dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
+    dataset = XMLBasedDataset(root=f'{data_root}/train', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
     if args.optimize != "":
-        nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize, mix=False, new_load=False)
+        nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize, hf=False, new_load=False)
 
     printed_classes = [nanodet.classes[0], f"GR: {nanodet.classes[0]}"]
-    for (img, annotation) in dataset:
+    for idx, (img, annotation) in enumerate(dataset):
+        if idx>20:
+            break
         boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
-                              nms_max_num=args.nms, mix=False, big=True, mode="inf")
+                              nms_max_num=args.nms, hf=False)
         for box in annotation.boxes:
             box.name = 1
             boxes.add_box(box)

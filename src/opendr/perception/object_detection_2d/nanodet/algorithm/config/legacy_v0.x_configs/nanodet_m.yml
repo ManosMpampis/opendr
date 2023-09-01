@@ -60,7 +60,7 @@ data:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   val:
     input_size:  [320, 320] #[640, 640] #[w,h][1920, 1088][960, 544]
-    keep_ratio: False #True #False
+    keep_ratio: True #False
     pipeline:
       normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
   bench_test:

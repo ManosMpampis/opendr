@@ -42,11 +42,18 @@ class TrainingTask(LightningModule):
         evaluator: Evaluator for evaluating the model performance.
     """
 
-    def __init__(self, cfg, model, evaluator=None):
+    def __init__(self, cfg, model, evaluator=None, accumulate=1, qat=False):
         super(TrainingTask, self).__init__()
         self.cfg = cfg
+        self.accumulate = accumulate
         self.classes = cfg.class_names
         self.model = model
+        self.qat = qat
+        if qat:
+            self.model.eval()
+            self.model.qconfig = torch.quantization.get_default_qconfig(self.cfg.qat.qconfig)
+            self.model.fuse()
+            self.model = torch.quantization.prepare_qat(self.model.train())
         self.evaluator = evaluator
         self.save_flag = -10
         self.log_style = "NanoDet"
@@ -81,15 +88,27 @@ class TrainingTask(LightningModule):
         save_model_state(path=path, model=self.model, weight_averager=self.weight_averager, verbose=verbose)
 
     def save_current_model(self, path, verbose):
-        save_model_state(path=path, model=self.model, weight_averager=self.weight_averager, verbose=verbose)
+        model = self.model
+        if self.qat:
+            self.model.eval()
+            model = torch.quantization.convert(self.model)
+        save_model_state(path=path, model=model, weight_averager=self.weight_averager, verbose=verbose)
+        if self.qat:
+            self.model.train()
 
     @torch.jit.unused
     def training_step(self, batch, batch_idx):
         batch = self._preprocess_batch_input(batch)
         preds, loss, loss_states = self.model.forward_train(batch)
 
+        if self.qat:
+            if self.global_step > self.cfg.qat.freeze_quantizer_parameters:
+                self.model.apply(torch.quantization.disable_observer)
+            if self.global_step > self.cfg.qat.freeze_bn:
+                self.model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
+
         # log train losses
-        if self.global_step % self.cfg.log.interval == 0:
+        if (self.global_step + 1) % self.cfg.log.interval == 0:
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
             lr = self.optimizers().param_groups[0]["lr"]
             log_msg = "Train|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
@@ -112,13 +131,13 @@ class TrainingTask(LightningModule):
                     self.global_step,
                 )
             if self.logger:
-                self.logger.info(log_msg)
+                self.info(log_msg)
 
         return loss
 
     def training_epoch_end(self, outputs: List[Any]) -> None:
         # save models in schedule epoches
-        if self.current_epoch % self.cfg.schedule.val_intervals == 0:
+        if (self.current_epoch + 1) % self.cfg.schedule.val_intervals == 0:
             checkpoint_save_path = os.path.join(self.cfg.save_dir, "checkpoints")
             mkdir(self.local_rank, checkpoint_save_path)
             print("===" * 10)
@@ -136,7 +155,7 @@ class TrainingTask(LightningModule):
         else:
             preds, loss, loss_states = self.model.forward_train(batch)
 
-        if batch_idx % self.cfg.log.interval == 0:
+        if (batch_idx + 1) % self.cfg.log.interval == 0:
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
             lr = self.optimizers().param_groups[0]["lr"]
             log_msg = "Val|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
@@ -159,8 +178,7 @@ class TrainingTask(LightningModule):
                     self.global_step,
                 )
             if self.logger:
-                self.logger.info(log_msg)
-                # self.text_summary("Val_Epoch", log_msg, self.global_step % 20)
+                self.info(log_msg)
 
         dets = self.model.head.post_process(preds, batch, "eval")
         return dets
@@ -203,7 +221,7 @@ class TrainingTask(LightningModule):
                             "has_data": False,
                             "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes},
                             "optimized": False, "optimizer_info": {}}
-                with open(os.path.join(best_save_path, "nanodet_model_state_best.pth"), 'w', encoding='utf-8') as f:
+                with open(os.path.join(best_save_path, "nanodet_model_state_best.json"), 'w', encoding='utf-8') as f:
                     json.dump(metadata, f, ensure_ascii=False, indent=4)
 
                 txt_path = os.path.join(best_save_path, "eval_results.txt")
@@ -219,7 +237,7 @@ class TrainingTask(LightningModule):
                 self.logger.log_metrics(eval_results, self.current_epoch + 1)
         else:
             if self.logger:
-                self.logger.info("Skip val on rank {}".format(self.local_rank))
+                self.info("Skip val on rank {}".format(self.local_rank))
         return
 
     def test_step(self, batch, batch_idx):
@@ -246,7 +264,7 @@ class TrainingTask(LightningModule):
                         f.write("{}: {}\n".format(k, v))
         else:
             if self.logger:
-                self.logger.info("Skip test on rank {}".format(self.local_rank))
+                self.info("Skip test on rank {}".format(self.local_rank))
         return
 
     def configure_optimizers(self):
@@ -312,8 +330,15 @@ class TrainingTask(LightningModule):
                 pg["lr"] = pg["initial_lr"] * k
 
         # update params
-        optimizer.step(closure=optimizer_closure)
-        optimizer.zero_grad()
+        # if self.accumulate < 0:  # batch size
+        #     optimizer.step(closure=optimizer_closure)
+        #     optimizer.zero_grad()
+
+        if (optimizer_idx + 1) % self.accumulate == 0:
+            optimizer.step(closure=optimizer_closure)
+            optimizer.zero_grad()
+        else:
+            optimizer_closure()
 
     def get_progress_bar_dict(self):
         # don't show the version number
@@ -330,7 +355,7 @@ class TrainingTask(LightningModule):
                 text: Text to record
                 step: Step value to record
         """
-        if self.logger.verbose_only is False:
+        if self.logger:
             self.logger.experiment.add_text(tag, text, global_step=step)
 
     def scalar_summary(self, tag, value, step):
@@ -343,14 +368,16 @@ class TrainingTask(LightningModule):
 
         """
         # if self.local_rank < 1:
-        if self.logger.verbose_only is False:
+        if self.logger:
+            #if not self.logger.verbose_only:
             self.logger.experiment.add_scalar(tag, value, global_step=step)
 
     def info(self, string):
-        if self.logger:
-            self.logger.info(string)
+        # if self.logger:
+        self.logger.info(string)
 
     # ------------Hooks-----------------
+
     def on_fit_start(self) -> None:
         if "weight_averager" in self.cfg.model:
             if self.logger:

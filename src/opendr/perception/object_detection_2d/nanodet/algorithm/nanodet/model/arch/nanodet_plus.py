@@ -28,6 +28,7 @@ class NanoDetPlus(OneStageDetector):
         aux_head,
         head,
         detach_epoch=0,
+        **kwargs
     ):
         super(NanoDetPlus, self).__init__(
             backbone_cfg=backbone, fpn_cfg=fpn, head_cfg=head

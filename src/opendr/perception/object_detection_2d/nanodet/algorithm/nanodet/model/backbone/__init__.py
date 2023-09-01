@@ -22,6 +22,9 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backb
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.resnet import ResNet
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.shufflenetv2 import ShuffleNetV2
 
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.simpleConv import SimpleCnn
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.simpleConv_2 import SimpleCnn_2
+
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_ghostnet import GhostNetSmall
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_mobilenetv2 import MobileNetV2Small
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_repvgg import RepVGGSmall
@@ -59,5 +62,9 @@ def build_backbone(cfg):
         return ShuffleNetV2Small(**backbone_cfg)
     elif name == "SmallVgg":
         return VggSmall(**backbone_cfg)
+    elif name == "SimpleCnn":
+        return SimpleCnn(**backbone_cfg)
+    elif name == "SimpleCnn_2":
+        return SimpleCnn_2(**backbone_cfg)
     else:
         raise NotImplementedError

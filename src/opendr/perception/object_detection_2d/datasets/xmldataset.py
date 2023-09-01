@@ -122,27 +122,27 @@ if __name__ == '__main__':
     #     "dataset_type": "BINARY_FOOTBALL",
     # }
     dataset_metadata = {
-        "data_root": "/media/manos/hdd/allea_datasets/weedDataset/1080p",
+        "data_root": "/media/manos/hdd/allea_datasets/weedDataset/original_cropped",
         "classes": [],
         "dataset_type": "",
     }
     data_root = dataset_metadata["data_root"]
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
-    dataset = XMLBasedDataset(root=f'{data_root}/eval/small_images', dataset_type=dataset_type, images_dir='images',
+    dataset = XMLBasedDataset(root=f'{data_root}/eval', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
 
     for i, (img, targets) in enumerate(dataset):
         sum = 0
         for target in targets:
-            target_list = [target.left, target.top, target.width, target.height]
+            target_list = [target.left+1, target.top+1, target.width, target.height]
             for coordinate in target_list:
                 if coordinate < 0:
                     sum += 1
                     print(target_list)
         if sum > 0:
             print(f"found in: {dataset.image_paths[i]}")
-        continue
+        # continue
 
         # if dataset.image_paths[i] == "0_94c29a7cb6e9938a6501.jpg":
         img = img.opencv()

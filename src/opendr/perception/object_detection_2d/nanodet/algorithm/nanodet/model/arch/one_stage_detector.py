@@ -55,5 +55,21 @@ class OneStageDetector(nn.Module):
 
         return preds, loss, loss_states
 
+    def fuse(self):
+        if hasattr(self.backbone, "fuse"):
+            self.backbone.fuse()
+        else:
+            print(f"Backbone {self.backbone} does not have fuse function, run regular instead")
+        if hasattr(self, "fpn"):
+            if hasattr(self.fpn, "fuse"):
+                self.fpn.fuse()
+            else:
+                print(f"FPN {self.fpn} does not have fuse function, run regular instead")
+        if hasattr(self, "head"):
+            if hasattr(self.head, "fuse"):
+                self.backbone.fuse()
+            else:
+                print(f"Head {self.head} does not have fuse function, run regular instead")
+
     def set_epoch(self, epoch):
         self.epoch = epoch

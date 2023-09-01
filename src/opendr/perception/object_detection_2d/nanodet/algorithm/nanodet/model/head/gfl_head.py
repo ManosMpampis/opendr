@@ -216,7 +216,7 @@ class GFLHead(nn.Module):
             bbox_pred = scale(self.gfl_reg(reg_feat)).float()
             output = torch.cat([cls_score, bbox_pred], dim=1)
             outputs.append(output.flatten(start_dim=2))
-        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
+        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1).contiguous()
         return outputs
 
     @torch.jit.unused
@@ -230,7 +230,7 @@ class GFLHead(nn.Module):
         for future in futures:
             outputs.append(future.wait())
 
-        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
+        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1).contiguous()
         return outputs
 
     def forward_each_input(self, feats, idx, scale):

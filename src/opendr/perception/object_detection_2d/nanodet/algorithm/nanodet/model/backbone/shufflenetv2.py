@@ -76,6 +76,7 @@ class ShuffleV2Block(nn.Module):
     @staticmethod
     def channel_shuffle(x, groups):
         # type: (torch.Tensor, torch.Tensor) -> torch.Tensor
+        # ch_l = x.is_contiguous(memory_format=torch.channels_last)
         batchsize, num_channels, height, width = x.size()
         channels_per_group = (num_channels / groups).to(torch.int32)
 
@@ -86,7 +87,7 @@ class ShuffleV2Block(nn.Module):
 
         # flatten
         x = x.view(batchsize, -1, height, width)
-
+        # x = x.to(memory_format=torch.channels_last) if ch_l else x
         return x
 
     def forward(self, x):
@@ -146,10 +147,6 @@ class ShuffleNetV2(nn.Module):
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        # self.stage_list = nn.ModuleList()
-        #
-        # self.stage_list.append(nn.Module())
-        # self.stage_list.append(nn.Module())
         stage_names = ["stage{}".format(i) for i in [2, 3, 4]]
         for name, repeats, output_channels in zip(
             stage_names, self.stage_repeats, self._stage_out_channels[1:]
@@ -179,7 +176,7 @@ class ShuffleNetV2(nn.Module):
             self.stage4.add_module("conv5", conv5)
         self._initialize_weights(pretrain)
 
-    # @torch.jit.unused
+    @torch.jit.unused
     def forward(self, x):
         x = self.conv1(x)
         x = self.maxpool(x)
@@ -191,11 +188,11 @@ class ShuffleNetV2(nn.Module):
         x = self.stage4(x)
         output.append(x)
         # for i in range(2, 5):
-            # stage = self.stage_list(i)
-            # stage = getattr(self, "stage{}".format(i))
-            # x = stage(x)
-            # if i in self.out_stages:
-            #     output.append(x)
+        #     stage = self.stage_list(i)
+        #     stage = getattr(self, "stage{}".format(i))
+        #     x = stage(x)
+        #     if i in self.out_stages:
+        #         output.append(x)
         return output
 
     def _initialize_weights(self, pretrain=True):

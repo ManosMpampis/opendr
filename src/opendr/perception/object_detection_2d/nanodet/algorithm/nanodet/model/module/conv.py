@@ -5,6 +5,7 @@ RepVGGConvModule refers from RepVGG: Making VGG-style ConvNets Great Again
 import warnings
 
 import numpy as np
+import math
 import torch
 import torch.nn as nn
 
@@ -12,6 +13,158 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.modul
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.init_weights\
     import constant_init, kaiming_init
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.norm import build_norm_layer
+
+
+def autopad(k, p=None, d=1):  # kernel, padding, dilation
+    # Pad to 'same' shape outputs
+    if d > 1:
+        k = d * (k - 1) + 1 if isinstance(k, int) else [d * (x - 1) + 1 for x in k]  # actual kernel-size
+    if p is None:
+        p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
+    return p
+
+
+def fuse_conv_and_bn(conv, bn):
+    # Fuse Conv2d() and BatchNorm2d() layers https://tehnokv.com/posts/fusing-batchnorm-and-conv/
+    fusedconv = nn.Conv2d(conv.in_channels,
+                          conv.out_channels,
+                          kernel_size=conv.kernel_size,
+                          stride=conv.stride,
+                          padding=conv.padding,
+                          dilation=conv.dilation,
+                          groups=conv.groups,
+                          bias=True).requires_grad_(False).to(conv.weight.device)
+
+    # Prepare filters
+    w_conv = conv.weight.clone().view(conv.out_channels, -1)
+    w_bn = torch.diag(bn.weight.div(torch.sqrt(bn.eps + bn.running_var)))
+    fusedconv.weight.copy_(torch.mm(w_bn, w_conv).view(fusedconv.weight.shape))
+
+    # Prepare spatial bias
+    b_conv = torch.zeros(conv.weight.size(0), device=conv.weight.device) if conv.bias is None else conv.bias
+    b_bn = bn.bias - bn.weight.mul(bn.running_mean).div(torch.sqrt(bn.running_var + bn.eps))
+    fusedconv.bias.copy_(torch.mm(w_bn, b_conv.reshape(-1, 1)).reshape(-1) + b_bn)
+
+    return fusedconv
+
+
+def fuse_modules(m):
+    if isinstance(m, Conv) and hasattr(m, 'bn'):
+        m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
+        delattr(m, 'bn')  # remove batchnorm
+        m.forward = m.forward_fuse  # update forward
+    elif isinstance(m, ConvQuant) and (hasattr(m, "bn") and hasattr(m, "act")):
+        if isinstance(m.bn, nn.BatchNorm2d) and isinstance(m.act, nn.ReLU):
+            torch.quantization.fuse_modules(m, [["conv", "bn", "act"]], inplace=True)
+        elif isinstance(m.act, nn.ReLU) and not isinstance(m.bn, nn.BatchNorm2d):
+            torch.quantization.fuse_modules(m, [["conv", "act"]], inplace=True)
+        elif isinstance(m.bn, nn.BatchNorm2d) and not isinstance(m.act, nn.ReLU):
+            torch.quantization.fuse_modules(m, [["conv", "bn"]], inplace=True)
+        delattr(m, 'bn')
+        delattr(m, 'act')
+        m.forward = m.forward_fuse
+    elif isinstance(m, nn.Sequential) or isinstance(m, nn.ModuleList):
+        for m_in_list in m:
+            fuse_modules(m_in_list)
+
+
+class ConvPool(nn.Module):
+    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
+    default_act = nn.SiLU()  # default activation
+    default_pool = nn.MaxPool2d(kernel_size=2, stride=1, padding=1)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True, s_p=1):
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        if pool is True:
+            self.default_pool.stride = s_p
+            self.pool = self.default_pool.stride
+        elif isinstance(pool, nn.Module):
+            self.pool = pool
+        else:
+            self.pool = nn.Identity()
+
+    def forward(self, x):
+        return self.act(self.pool(self.bn(self.conv(x))))
+
+    def forward_fuse(self, x):
+        return self.act(self.pool(self.conv(x)))
+
+
+class ConvQuant(nn.Module):
+    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = nn.ReLU(inplace=True) if act else nn.Identity()  # default activation
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.act(self.bn(self.conv(x)))
+        x = self.dequant(x)
+        return x
+
+    def forward_fuse(self, x):
+        x = self.quant(x)
+        x = self.conv(x)
+        x = self.dequant(x)
+        return x
+
+    def temp(self):
+        model = ConvQuant()
+        print(model)
+
+        def prepare_save(model, fused):
+            from torch.utils.mobile_optimizer import optimize_for_mobile
+            model.qconfig = torch.quantization.get_default_qconfig('qnnpack')
+            torch.quantization.prepare(model, inplace=True)
+            torch.quantization.convert(model, inplace=True)
+            torchscript_model = torch.jit.script(model)
+            torchscript_model_optimized = optimize_for_mobile(torchscript_model)
+            torch.jit.save(torchscript_model_optimized, "model.pt" if not fused else "model_fused.pt")
+
+        prepare_save(model, False)
+
+        model = ConvQuant()
+        model_fused = torch.quantization.fuse_modules(model, [["conv", "bn", "relu"]], inplace=False)
+        print(model_fused)
+
+        prepare_save(model_fused, True)
+
+
+class DWConvQuant(ConvQuant):
+    # Depth-wise convolution
+    def __init__(self, c1, c2, k=1, s=1, d=1, act=True, p=None, g=None):  # ch_in, ch_out, kernel, stride, dilation, activation
+        super().__init__(c1, c2, k, s, g=math.gcd(c1, c2), d=d, act=act)
+
+
+class Conv(nn.Module):
+    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
+    default_act = nn.SiLU()  # default activation
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+
+    def forward(self, x):
+        return self.act(self.bn(self.conv(x)))
+
+    def forward_fuse(self, x):
+        return self.act(self.conv(x))
+
+
+class DWConv(Conv):
+    # Depth-wise convolution
+    def __init__(self, c1, c2, k=1, s=1, d=1, act=True, p=None, g=None):  # ch_in, ch_out, kernel, stride, dilation, activation
+        super().__init__(c1, c2, k, s, g=math.gcd(c1, c2), d=d, act=act)
 
 
 class ConvModule(nn.Module):
@@ -126,9 +279,11 @@ class ConvModule(nn.Module):
     def init_weights(self):
         if self.activation == "LeakyReLU":
             nonlinearity = "leaky_relu"
+            a = self.act.negative_slope
         else:
             nonlinearity = "relu"
-        kaiming_init(self.conv, nonlinearity=nonlinearity)
+            a = 0
+        kaiming_init(self.conv, nonlinearity=nonlinearity, a=a)
         if self.with_norm:
             constant_init(self.norm, 1, bias=0)
 
@@ -213,9 +368,11 @@ class DepthwiseConvModule(nn.Module):
             # norm layer is after conv layer
             _, self.dwnorm = build_norm_layer(norm_cfg, in_channels)
             _, self.pwnorm = build_norm_layer(norm_cfg, out_channels)
+        else:
+            self.dwnorm = nn.Identity()
+            self.pwnorm = nn.Identity()
         # build activation layer
-        if self.activation:
-            self.act = act_layers(self.activation)
+        self.act = act_layers(self.activation)
 
         # Use msra init by default
         self.init_weights()
@@ -223,10 +380,12 @@ class DepthwiseConvModule(nn.Module):
     def init_weights(self):
         if self.activation == "LeakyReLU":
             nonlinearity = "leaky_relu"
+            a = self.act.negative_slope
         else:
             nonlinearity = "relu"
-        kaiming_init(self.depthwise, nonlinearity=nonlinearity)
-        kaiming_init(self.pointwise, nonlinearity=nonlinearity)
+            a = 0
+        kaiming_init(self.depthwise, nonlinearity=nonlinearity, a=a)
+        kaiming_init(self.pointwise, nonlinearity=nonlinearity, a=a)
         if self.with_norm:
             constant_init(self.dwnorm, 1, bias=0)
             constant_init(self.pwnorm, 1, bias=0)

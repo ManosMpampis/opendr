@@ -7,7 +7,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.check_
 )
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.config import cfg, load_config
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.logger \
-    import AverageMeter, Logger, MovingAverage, NanoDetLightningLogger
+    import AverageMeter, Logger, MovingAverage, NanoDetLightningLogger, NanoDetLightningTensorboardLogger
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.misc \
     import images_to_levels, multi_apply, unmap
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.path import collect_files, mkdir
@@ -15,7 +15,8 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.rank_f
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.scatter_gather \
     import gather_results, scatter_kwargs
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.util_mixins import NiceRepr
-
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.autobatch import autobatch
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.common import get_size
 
 __all__ = [
     "distance2bbox",
@@ -37,5 +38,8 @@ __all__ = [
     "NiceRepr",
     "collect_files",
     "NanoDetLightningLogger",
+    "NanoDetLightningTensorboardLogger",
     "convert_avg_params",
+    "autobatch",
+    "get_size"
 ]

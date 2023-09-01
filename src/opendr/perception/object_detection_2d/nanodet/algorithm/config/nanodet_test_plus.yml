@@ -1,45 +1,48 @@
 #Config File example
-save_dir: ./temp/augmented_data_bigger_pos
-check_point_name: augmented_data_bigger_pos
+save_dir: ./temp/test_plus
+check_point_name: test_plus
 model:
+  weight_averager:
+    name: ExpMovingAverager
+    decay: 0.9998
   arch:
-    weight_averager:
-      name: ExpMovingAverager
-      decay: 0.9998
-    name: OneStageDetector
+    name: NanoDetPlus
+    ch_l: False
+    fuse: False
+    detach_epoch: 10
     backbone:
-      name: SmallVgg
-      out_stages: [3, 4]
-      stages_inplanes:  [3, 8, 8, 6]
-      stages_outplanes: [8, 8, 6, 6]
-      stages_strides:   [2, 2, 1, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
-      maxpool_after:    [0, 0, 0, 0]
-      maxpool_stride:   1
-      activation: LeakyReLU
+      name: SimpleCnn
+      activation: ReLU
+      use_depthwise: False
+      quant: False
       pretrain: False
     fpn:
-      name: GhostPAN #PAN #FPN  #PAN a litle slower than FPN
-      in_channels: [6, 6] #[8, 8] #[8, 6]
-      out_channels: 6
+      name: SimpleGPAN #PAN #FPN  #PAN a litle slower than FPN
+      in_channels: [8, 8] #[8, 6]
+      out_channels: 8
+      use_depthwise: False
+      kernel_size: 3
+      expand: 1
+      num_blocks: 1
       upsample_cfg:
         scale_factor: 2
         mode: bilinear
-      use_depthwise: True
-      num_blocks: 1
-      kernel_size: 3
-      activation: LeakyReLU
+      activation: ReLU
+      quant: False
     head:
-      name: NanoDetPlusHead #NanoDetPlusHead NanoDetHead
+      name: SimplifierNanoDetPlusHead #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
       num_classes: 1
-      input_channel: 6 #Out channel of fpn
-      feat_channels: 6
+      input_channel: 8 #Out channel of fpn
+      feat_channels: 8
       stacked_convs: 1 #Its pass in head have so many conv in list
-      use_depthwise: True
-#      octave_base_scale: 1 #Only in NanoDetHead
       kernel_size: 3 #Only in NanoDetPlusHead
       strides: [4, 8] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
-      activation: LeakyReLU
+      use_depthwise: False
+#      octave_base_scale: 1 #Only in NanoDetHead
       reg_max: 7
+      activation: LeakyReLU
+      quant: False
+      fork: False
       norm_cfg:
         type: BN
       loss:
@@ -54,14 +57,28 @@ model:
         loss_bbox:
           name: GIoULoss
           loss_weight: 2.0
+    # Auxiliary head, only use in training time.
+    aux_head:
+      name: SimpleConvHead
+      num_classes: 1
+      input_channel: 16
+      feat_channels: 16
+      stacked_convs: 2
+      strides: [4, 8]
+      activation: ReLU
+      norm_cfg:
+        type: GN
+        num_groups: 16
+        requires_grad: True
+      reg_max: 7
 data:
   train:
     input_size: [192, 192] #[w,h]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      scale: [1.0, 1.0]
-      stretch: [[1.0, 1.0], [1.0, 1.0]]
+      scale: [0.9, 1.1]
+      stretch: [[0.9, 1.1], [0.9, 1.1]]
       rotation: 0
       shear: 0
       translate: 0.0
@@ -69,9 +86,9 @@ data:
       jitter_box: 0.1
       hard_pos: 0.0
       hard_pos_ratio: 0.0
-      brightness: 1.0
-      contrast: [1.0, 1.0]
-      saturation: [1.0, 1.0]
+      brightness: 0.2
+      contrast: [0.6, 1.4]
+      saturation: [0.5, 1.2]
       normalize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
   val:
     input_size: [192, 192] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
@@ -80,14 +97,14 @@ data:
       perspective: 0.0
       normalize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
   bench_test:
-    input_size: [1920, 1088]
+    input_size: [192, 192]
     keep_ratio: False
     pipeline:
       perspective: 0.0
       normilize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
 device:
   gpu_ids: [0]
-  workers_per_gpu: 4
+  workers_per_gpu: 8
   batchsize_per_gpu: 256
   precision: 16
 schedule:
@@ -95,16 +112,16 @@ schedule:
   optimizer:
     name: SGD
     lr: 0.01
-    momentum: 0.99
+    momentum: 0.9
     weight_decay: 0.05
   warmup:
     name: linear
-    steps: 350
+    steps: 1150
     ratio: 0.0001
-  total_epochs: 100
+  total_epochs: 600
   lr_schedule:
     name: CosineAnnealingLR
-    T_max: 400
+    T_max: 700
     eta_min: 0.00005
     last_epoch: -1
   val_intervals: 2

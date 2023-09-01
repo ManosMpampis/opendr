@@ -61,4 +61,4 @@ def divisible_padding(
 
     padding_size = [0, img_widths - img_tensor.shape[-1], 0, img_heights - img_tensor.shape[-2]]
     batch_img = F.pad(img_tensor, padding_size, value=pad_value)
-    return batch_img.unsqueeze(0)
+    return batch_img.unsqueeze(0).contiguous()

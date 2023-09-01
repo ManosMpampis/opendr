@@ -23,14 +23,17 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch 
 
 
 class Predictor(nn.Module):
-    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, mix=False, mode="val"):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, hf=False):
         super(Predictor, self).__init__()
         self.cfg = cfg
         self.device = device
         self.conf_thresh = conf_thresh
         self.iou_thresh = iou_thresh
         self.nms_max_num = nms_max_num
-        self.mix = mix
+        self.hf = hf
+        self.fuse = self.cfg.model.arch.fuse
+        self.ch_l = self.cfg.model.arch.ch_l
+        self.traced_model = None
         if self.cfg.model.arch.backbone.name == "RepVGG":
             deploy_config = self.cfg.model
             deploy_config.arch.backbone.update({"deploy": True})
@@ -39,18 +42,19 @@ class Predictor(nn.Module):
                 import repvgg_det_model_convert
             model = repvgg_det_model_convert(model, deploy_model)
 
-        self.model = model.to(device).eval()
-
-        for para in self.model.parameters():
+        for para in model.parameters():
             para.requires_grad = False
 
-        if mode != "val":
-            self.cfg.defrost()
-            self.cfg.data.val.input_size = [1920, 1088]
-            self.cfg.freeze()
-        self.pipeline = Pipeline(self.cfg.data.val.pipeline, self.cfg.data.val.keep_ratio)
+        if self.fuse:
+            model.fuse()
+        if self.ch_l:
+            model = model.to(memory_format=torch.channels_last)
+        if self.hf:
+            model = model.half()
 
-        self.traced_model = None
+        self.model = model.to(device).eval()
+
+        self.pipeline = Pipeline(self.cfg.data.val.pipeline, self.cfg.data.val.keep_ratio)
 
     def trace_model(self, dummy_input):
         self.traced_model = torch.jit.trace(self, dummy_input)
@@ -68,7 +72,7 @@ class Predictor(nn.Module):
         # cv2 is needed, and it is installed with abi cxx11 but torch is in cxx<11
         return self.model.inference(img)
 
-    def preprocessing(self, img, bench=False):
+    def preprocessing(self, img, bench=False, not_trt=True):
         if bench:
             try:
                 input_size = self.cfg.data.bench_test.input_size
@@ -84,11 +88,14 @@ class Predictor(nn.Module):
         meta = dict(img_info=img_info, raw_img=img, img=img)
         meta = self.pipeline(None, meta, input_size)
         meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device)
+
+        meta["img"] = meta["img"].half() if self.hf else meta["img"]
         meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
 
-        _input = meta["img"].half().contiguous() if self.mix else meta["img"].contiguous()
-        _height = torch.tensor(height)
-        _width = torch.tensor(width)
+        _input = meta["img"]
+        _input = _input.to(memory_format=torch.channels_last) if self.ch_l else _input
+        _height = torch.as_tensor(height)
+        _width = torch.as_tensor(width)
         _warp_matrix = torch.from_numpy(meta["warp_matrix"])
 
         return _input, _height, _width, _warp_matrix
@@ -101,30 +108,20 @@ class Predictor(nn.Module):
 
 
 class Postprocessor(nn.Module):
-    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, mix=True):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, hf=True):
         super(Postprocessor, self).__init__()
         self.cfg = cfg
         self.device = device
         self.conf_thresh = conf_thresh
         self.iou_thresh = iou_thresh
         self.nms_max_num = nms_max_num
-        self.mix = mix
-        if self.cfg.model.arch.backbone.name == "RepVGG":
-            deploy_config = self.cfg.model
-            deploy_config.arch.backbone.update({"deploy": True})
-            deploy_model = build_model(deploy_config)
-            from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.repvgg\
-                import repvgg_det_model_convert
-            model = repvgg_det_model_convert(model, deploy_model)
+        self.hf = hf
 
         self.model = model.to(device).eval()
 
-        for para in self.model.parameters():
-            para.requires_grad = False
-
     def forward(self, preds, input, height, width, warp_matrix):
-        meta = {"height": height, "width": width, 'img': input, 'warp_matrix': warp_matrix}
-        if self.mix:
+        meta = {"height": height, "width": width, 'img': input.half() if self.hf else input, 'warp_matrix': warp_matrix}
+        if self.hf:
             preds = preds.half()
         res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
                                            nms_max_num=self.nms_max_num)

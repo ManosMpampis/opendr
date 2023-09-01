@@ -56,7 +56,9 @@ def build_dataset(cfg, dataset, class_names, mode, verbose=True):
             return dataset
         elif isinstance(dataset, XMLBasedDataset):
             dataset = XMLDataset(img_path=dataset.abs_images_dir, ann_path=dataset.abs_annot_dir, mode=mode,
-                                 class_names=dataset.classes, **dataset_cfg)
+                                 class_names=dataset.classes, number_of_images=None, **dataset_cfg)
+            return dataset
+        elif isinstance(dataset, XMLDataset) or isinstance(dataset, CocoDataset):
             return dataset
         else:
             raise ValueError("Dataset type {} not supported".format(type(dataset)))
