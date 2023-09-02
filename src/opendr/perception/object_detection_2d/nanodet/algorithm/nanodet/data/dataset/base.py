@@ -26,7 +26,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transform import Pipeline
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import get_size
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import get_size, mkdir
 
 
 IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # include image suffixes
@@ -200,7 +200,9 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
     def cache_images_to_disk(self, i):
         # Saves an image as an *.npy file for faster loading
         meta = self.get_per_img_info(i)
-        f = self.npy_files[i] = Path(os.path.join(self.img_path, meta["file_name"])).with_suffix(".npy")
+        f = Path(os.path.join(self.img_path, "npys", meta["file_name"])).with_suffix(".npy")
         if not f.exists():
+            mkdir(-1, os.path.join(self.img_path, "npys"))
             meta = self.get_data(i)
+            self.npy_files[i] = f
             np.save(f.as_posix(), meta["img"])
