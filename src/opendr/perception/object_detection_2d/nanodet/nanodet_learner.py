@@ -21,8 +21,7 @@ from pathlib import Path
 import pytorch_lightning as pl
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from pytorch_lightning.callbacks import TQDMProgressBar
-# from pytorch_lightning.callbacks import ProgressBar
+from pytorch_lightning.callbacks import ProgressBar
 
 try:
     import tensorrt as trt
@@ -40,7 +39,6 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import (
     NanoDetLightningLogger,
     cfg,
-    env_utils,
     load_config,
     load_model_weight,
     mkdir,
@@ -63,7 +61,6 @@ import onnxruntime as ort
 
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
-torch.set_float32_matmul_precision("medium")
 
 class NanodetLearner(Learner):
     def __init__(self, model_to_use="m", iters=None, lr=None, batch_size=None, checkpoint_after_iter=None,
@@ -115,6 +112,7 @@ class NanodetLearner(Learner):
             writer = SummaryWriter(f'./models/{model_log_name}')
             writer.add_graph(self.model.eval(), self.__dummy_input()[0].to("cpu"))
             writer.close()
+            self.model.train()
 
     def _load_hparam(self, model: str):
         """ Load hyperparameters for nanodet models and training configuration
@@ -710,7 +708,8 @@ class NanodetLearner(Learner):
             self.logger.info("Setting up data...")
 
         train_dataset = build_dataset(self.cfg.data.train, dataset, self.cfg.class_names, "train")
-        val_dataset = train_dataset if val_dataset is None else \
+        import copy
+        val_dataset = copy.deepcopy(train_dataset) if val_dataset is None else \
             build_dataset(self.cfg.data.val, val_dataset, self.cfg.class_names, "val")
 
         evaluator = build_evaluator(self.cfg.evaluator, val_dataset)
@@ -718,18 +717,18 @@ class NanodetLearner(Learner):
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=self.batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=self.cfg.device.workers_per_gpu,
-            pin_memory=True,
+            pin_memory=False,
             collate_fn=naive_collate,
-            drop_last=True,
+            drop_last=False,
         )
         val_dataloader = torch.utils.data.DataLoader(
             val_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.cfg.device.workers_per_gpu,
-            pin_memory=True,
+            pin_memory=False,
             collate_fn=naive_collate,
             drop_last=False,
         )
@@ -742,44 +741,32 @@ class NanodetLearner(Learner):
 
         if self.logger:
             self.logger.info("Creating task...")
-
         self.task = TrainingTask(self.cfg, self.model, evaluator)
 
-        if cfg.device.gpu_ids == -1:
-            accelerator, devices, strategy, precision = ("cpu", None, None, cfg.device.precision)
-        else:
-            accelerator, devices, strategy, precision = ("gpu", cfg.device.gpu_ids, None, cfg.device.precision)
-            if len(devices) > 1:
-                strategy = "ddp"
-                env_utils.set_multi_processing(distributed=True)
-
-        # gpu_ids = None
-        # accelerator = None
-        # if self.device == "cuda":
-        #     gpu_ids = self.cfg.device.gpu_ids
-        #     accelerator = None if len(gpu_ids) <= 1 else "ddp"
+        gpu_ids = None
+        accelerator = None
+        if self.device == "cuda":
+            gpu_ids = self.cfg.device.gpu_ids
+            accelerator = None if len(gpu_ids) <= 1 else "ddp"
 
         trainer = pl.Trainer(
             default_root_dir=self.temp_path,
             max_epochs=self.iters,
+            gpus=gpu_ids,
             check_val_every_n_epoch=self.checkpoint_after_iter,
             accelerator=accelerator,
-            strategy=strategy,
-            devices=devices,
-            # gpus=gpu_ids,
             log_every_n_steps=self.cfg.log.interval,
             num_sanity_val_steps=0,
-            # resume_from_checkpoint=model_resume_path,
-            # callbacks=[ProgressBar(refresh_rate=0)],
-            callbacks=[TQDMProgressBar(refresh_rate=0)],
+            resume_from_checkpoint=model_resume_path,
+            callbacks=[ProgressBar(refresh_rate=0)],
             logger=self.logger,
-            benchmark=cfg.get("cudnn_benchmark", True),
-            precision=precision,
+            benchmark=True,
+            precision=self.cfg.device.precision,
             gradient_clip_val=self.cfg.get("grad_clip", 0.0),
             move_metrics_to_cpu=True
         )
 
-        trainer.fit(self.task, train_dataloader, val_dataloader, ckpt_path=model_resume_path)
+        trainer.fit(self.task, train_dataloader, val_dataloader)
         return
 
     def eval(self, dataset, verbose=True, logging=False, local_rank=1):
@@ -816,7 +803,7 @@ class NanodetLearner(Learner):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.cfg.device.workers_per_gpu,
-            pin_memory=True,
+            pin_memory=False,
             collate_fn=naive_collate,
             drop_last=False,
         )
@@ -829,26 +816,20 @@ class NanodetLearner(Learner):
 
         self.task = TrainingTask(self.cfg, self.model, evaluator)
 
-        if cfg.device.gpu_ids == -1:
-            accelerator, devices, precision = ("cpu", None, cfg.device.precision)
-        else:
-            accelerator, devices, precision = ("gpu", cfg.device.gpu_ids, cfg.device.precision)
-
-        # gpu_ids = None
-        # accelerator = None
-        # if self.device == "cuda":
-        #     gpu_ids = self.cfg.device.gpu_ids
-        #     accelerator = None if len(gpu_ids) <= 1 else "ddp"
+        gpu_ids = None
+        accelerator = None
+        if self.device == "cuda":
+            gpu_ids = self.cfg.device.gpu_ids
+            accelerator = None if len(gpu_ids) <= 1 else "ddp"
 
         trainer = pl.Trainer(
             default_root_dir=save_dir,
+            gpus=gpu_ids,
             accelerator=accelerator,
-            devices=devices,
-            # gpus=gpu_ids,
             log_every_n_steps=self.cfg.log.interval,
             num_sanity_val_steps=0,
             logger=self.logger,
-            precision=precision,
+            precision=self.cfg.device.precision,
         )
         if self.logger:
             self.logger.info("Starting testing...")

@@ -57,6 +57,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         load_mosaic=False,
         mode="train",
         multi_scale=None,
+        number_of_images=None,
     ):
         assert mode in ["train", "val", "test"]
         self.img_path = img_path
@@ -73,6 +74,8 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
         print(ann_path)
         self.data_info = self.get_data_info(ann_path)
+        if number_of_images is not None:
+            self.data_info = self.data_info[:number_of_images]
 
     def __len__(self):
         return len(self.data_info)

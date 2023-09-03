@@ -29,7 +29,7 @@ model:
       activation: LeakyReLU
     head:
       name: NanoDetPlusHead
-      num_classes: 80
+      num_classes: 2
       input_channel: 128
       feat_channels: 128
       stacked_convs: 2
@@ -54,7 +54,7 @@ model:
     # Auxiliary head, only use in training time.
     aux_head:
       name: SimpleConvHead
-      num_classes: 80
+      num_classes: 2
       input_channel: 256
       feat_channels: 256
       stacked_convs: 4
@@ -63,63 +63,54 @@ model:
       reg_max: 7
 data:
   train:
-    input_size: [416,416] #[w,h]
+    input_size: [640,640] #[w,h]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      scale: [0.6, 1.4]
-      stretch: [[0.8, 1.2], [0.8, 1.2]]
-      rotation: 0
-      shear: 0
-      translate: 0.2
-      flip: 0.5
-      brightness: 0.2
-      contrast: [0.6, 1.4]
-      saturation: [0.5, 1.2]
-      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+#      scale: [0.6, 1.4]
+#      stretch: [[0.8, 1.2], [0.8, 1.2]]
+#      rotation: 0
+#      shear: 0
+#      translate: 0.2
+#      flip: 0.5
+#      brightness: 0.2
+#      contrast: [0.6, 1.4]
+#      saturation: [0.5, 1.2]
+#      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
   val:
-    input_size: [416,416] #[w,h]
+    input_size: [640,640] #[w,h]
     keep_ratio: False
     pipeline:
-      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+#      normalize: [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]
+      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
 device:
   gpu_ids: [0]
-  workers_per_gpu: 10
-  batchsize_per_gpu: 96
+  workers_per_gpu: 8
+  batchsize_per_gpu: 256
+  precision: 32
 schedule:
   resume: 0
   optimizer:
-    name: AdamW
-    lr: 0.001
+    name: SGD
+    lr: 0.01
+    momentum: 0.9
     weight_decay: 0.05
   warmup:
     name: linear
-    steps: 500
+    steps: 350
     ratio: 0.0001
-  total_epochs: 300
+  total_epochs: 100
   lr_schedule:
     name: CosineAnnealingLR
-    T_max: 300
+    T_max: 500
     eta_min: 0.00005
-  val_intervals: 10
-grad_clip: 35
+    last_epoch: -1
+  val_intervals: 2
 evaluator:
   name: CocoDetectionEvaluator
   save_key: mAP
 log:
-  interval: 50
+  interval: 1
 
-class_names: ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-              'train', 'truck', 'boat', 'traffic_light', 'fire_hydrant',
-              'stop_sign', 'parking_meter', 'bench', 'bird', 'cat', 'dog',
-              'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe',
-              'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-              'skis', 'snowboard', 'sports_ball', 'kite', 'baseball_bat',
-              'baseball_glove', 'skateboard', 'surfboard', 'tennis_racket',
-              'bottle', 'wine_glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-              'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-              'hot_dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
-              'potted_plant', 'bed', 'dining_table', 'toilet', 'tv', 'laptop',
-              'mouse', 'remote', 'keyboard', 'cell_phone', 'microwave',
-              'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock',
-              'vase', 'scissors', 'teddy_bear', 'hair_drier', 'toothbrush']
+class_names: ["poaceae", "brassicaceae"]

@@ -160,23 +160,28 @@ if __name__ == '__main__':
     from opendr.perception.object_detection_2d.utils.vis_utils import draw_bounding_boxes
     from opendr.engine.target import BoundingBox, BoundingBoxList
     from opendr.engine.data import Image
+    from opendr.perception.object_detection_2d.datasets import XMLBasedDataset
     import cv2
 
     pipeline = {
         "perspective": 0.0,
         "normalize": [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
     }
-    dataset_path = "/media/manos/hdd/Binary_Datasets/Football/"
+    dataset_path = "/media/manos/hdd/allea_datasets/weedDataset/cropped_images"
     dataset_metadata = {
-        "data_root": f"{dataset_path}/192x192_3pos_36neg_padded",
-        "classes": ["player"],
-        "dataset_type": "BINARY_FOOTBALL",
+        "data_root": f"{dataset_path}",
+        "classes": ["poaceae", "brassicaceae"],
+        "dataset_type": "WEED",
     }
     data_root = dataset_metadata["data_root"]
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
-    dataset = XMLDataset(img_path=f'{data_root}/test/images', ann_path=f'{data_root}/test/annotations',
-                         class_names=classes, input_size=(192, 192), pipeline=pipeline)
+    dataset = XMLBasedDataset(root=f'{data_root}/train', dataset_type=dataset_type, images_dir='images',
+                              annotations_dir='annotations', classes=classes)
+
+    dataset = XMLDataset(img_path=dataset.abs_images_dir, ann_path=dataset.abs_annot_dir, mode="train",
+                         class_names=dataset.classes, number_of_images=100, input_size=[640, 640], keep_ratio=False,
+                         pipeline=pipeline)
 
     for i, meta_data in enumerate(dataset):
         img = Image(meta_data["img"])

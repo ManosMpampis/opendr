@@ -55,7 +55,8 @@ class GhostBlocks(nn.Module):
                 activation=activation,
             )
         blocks = []
-        for _ in range(num_blocks):
+        for idx in range(num_blocks):
+            in_channels = in_channels if idx == 0 else in_channels // 2
             blocks.append(
                 GhostBottleneck(
                     in_channels,
