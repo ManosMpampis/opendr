@@ -44,8 +44,8 @@ class VggSmall(nn.Module):
 
     def _make_layer(self, name, inplanes, outplanes, stride, maxpool):
         layer = nn.Sequential()
-        layer.add_module(f"conv{name}", nn.Conv2d(inplanes, outplanes, kernel_size=3, padding=1, stride=stride, bias=False))
-        layer.add_module(f"batchNorm{name}", nn.BatchNorm2d(outplanes))
+        layer.add_module(f"conv{name}", nn.Conv2d(inplanes, outplanes, kernel_size=3, padding=1, stride=stride, bias=False)) #False)) True))
+        layer.add_module(f"batchNorm{name}", nn.BatchNorm2d(outplanes)) #
         if maxpool == 1:
             layer.add_module(f"maxpool{name}", self.maxpool)
 
@@ -83,3 +83,22 @@ class VggSmall(nn.Module):
                 elif isinstance(m, nn.BatchNorm2d):
                     m.weight.data.fill_(1)
                     m.bias.data.zero_()
+
+
+if __name__ == '__main__':
+    model = VggSmall(
+        out_stages=(3, 4),
+        stages_inplanes=(3, 8, 8, 8),
+        stages_outplanes=(8, 8, 8, 8),
+        stages_strides=(2, 2, 1, 2),
+        maxpool_after=(0, 0, 0, 0),
+        maxpool_stride=1,
+        activation="ReLU",
+        pretrain=True
+    )
+    for m in model.modules():
+        print(m)
+    print("=========================================")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)

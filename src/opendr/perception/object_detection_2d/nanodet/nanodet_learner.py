@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import math
 import os
 import datetime
 import json
@@ -737,7 +737,13 @@ class NanodetLearner(Learner):
             self.batch_size = ((self.batch_size + 32 - 1) // 32) * 32
 
         nbs = self.cfg.schedule.effective_batchsize  # nominal batch size
-        accumulate = max(round(nbs / self.batch_size), 1) if nbs == -1 else 1
+        accumulate = 1
+        if nbs > 1:
+            accumulate = max(math.ceil(nbs / self.batch_size), 1)
+            self.batch_size = round(nbs / accumulate)
+            self.logger.info(f"After calculate accumulation\n"
+                             f"Batch size will be: {self.batch_size}\n"
+                             f"With accumulation: {accumulate}.")
 
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset,

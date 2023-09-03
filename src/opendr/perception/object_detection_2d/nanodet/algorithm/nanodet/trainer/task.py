@@ -102,9 +102,9 @@ class TrainingTask(LightningModule):
         preds, loss, loss_states = self.model.forward_train(batch)
 
         if self.qat:
-            if self.global_step > self.cfg.qat.freeze_quantizer_parameters:
+            if (self.global_step + 1) > self.cfg.qat.freeze_quantizer_parameters:
                 self.model.apply(torch.quantization.disable_observer)
-            if self.global_step > self.cfg.qat.freeze_bn:
+            if (self.global_step + 1) > self.cfg.qat.freeze_bn:
                 self.model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
 
         # log train losses
@@ -114,13 +114,13 @@ class TrainingTask(LightningModule):
             log_msg = "Train|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
                 self.current_epoch + 1,
                 self.cfg.schedule.total_epochs,
-                self.global_step,
+                (self.global_step+1),
                 batch_idx + 1,
                 self.trainer.num_training_batches,
                 memory,
                 lr,
             )
-            self.scalar_summary("Learning Rate", lr, self.global_step)
+            self.scalar_summary("Learning Rate", lr, (self.global_step + 1))
             for loss_name in loss_states:
                 log_msg += "{}:{:.4f}| ".format(
                     loss_name, loss_states[loss_name].mean().item()
@@ -128,7 +128,7 @@ class TrainingTask(LightningModule):
                 self.scalar_summary(
                     "Train_loss/" + loss_name,
                     loss_states[loss_name].mean().item(),
-                    self.global_step,
+                    (self.global_step+1),
                 )
             if self.logger:
                 self.info(log_msg)
@@ -161,7 +161,7 @@ class TrainingTask(LightningModule):
             log_msg = "Val|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
                 self.current_epoch + 1,
                 self.cfg.schedule.total_epochs,
-                self.global_step,
+                (self.global_step+1),
                 batch_idx + 1,
                 sum(self.trainer.num_val_batches),
                 memory,
@@ -175,7 +175,7 @@ class TrainingTask(LightningModule):
                 self.scalar_summary(
                     "Val_loss/" + loss_name,
                     loss_states[loss_name].mean().item(),
-                    self.global_step,
+                    (self.global_step+1),
                 )
             if self.logger:
                 self.info(log_msg)
@@ -316,7 +316,7 @@ class TrainingTask(LightningModule):
             using_lbfgs: True if the matching optimizer is lbfgs
         """
         # warm up lr
-        if self.trainer.global_step <= self.cfg.schedule.warmup.steps:
+        if self.trainer.current_epoch <= self.cfg.schedule.warmup.steps:
             if self.cfg.schedule.warmup.name == "constant":
                 k = self.cfg.schedule.warmup.ratio
             elif self.cfg.schedule.warmup.name == "linear":
@@ -330,10 +330,6 @@ class TrainingTask(LightningModule):
                 pg["lr"] = pg["initial_lr"] * k
 
         # update params
-        # if self.accumulate < 0:  # batch size
-        #     optimizer.step(closure=optimizer_closure)
-        #     optimizer.zero_grad()
-
         if (optimizer_idx + 1) % self.accumulate == 0:
             optimizer.step(closure=optimizer_closure)
             optimizer.zero_grad()

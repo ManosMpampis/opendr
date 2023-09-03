@@ -11,35 +11,35 @@ model:
     fuse: False
     backbone:
       name: SimpleCnn
-      activation: ReLU
-      use_depthwise: False
+      activation: LeakyReLU
+      use_depthwise: True
       quant: False
       pretrain: False
     fpn:
       name: SimpleGPAN #PAN #FPN  #PAN a litle slower than FPN
       in_channels: [8, 8] #[8, 6]
       out_channels: 8
-      use_depthwise: False
+      use_depthwise: True
       kernel_size: 3
       expand: 1
       num_blocks: 1
       upsample_cfg:
         scale_factor: 2
         mode: bilinear
-      activation: ReLU
+      activation: LeakyReLU
       quant: False
     head:
       name: SimplifierNanoDetPlusHead #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
-      num_classes: 1
+      num_classes: 2
       input_channel: 8 #Out channel of fpn
       feat_channels: 8
       stacked_convs: 1 #Its pass in head have so many conv in list
       kernel_size: 3 #Only in NanoDetPlusHead
       strides: [4, 8] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
-      use_depthwise: False
+      use_depthwise: True
 #      octave_base_scale: 1 #Only in NanoDetHead
       reg_max: 7
-      activation: ReLU
+      activation: LeakyReLU
       quant: False
       fork: False
       norm_cfg:
@@ -56,39 +56,49 @@ model:
         loss_bbox:
           name: GIoULoss
           loss_weight: 2.0
+    # Auxiliary head, only use in training time.
+    aux_head:
+      name: SimpleConvHead
+      num_classes: 2
+      input_channel: 8
+      feat_channels: 8
+      stacked_convs: 2
+      strides: [4, 8]
+      activation: LeakyReLU
+      reg_max: 7
 data:
   train:
-    input_size: [192, 192] #[w,h]
+    input_size: [640, 640] #[w,h]
     keep_ratio: False
     cache_images: disk
     pipeline:
       perspective: 0.0
-#      scale: [0.9, 1.1]
-#      stretch: [[0.9, 1.1], [0.9, 1.1]]
-#      rotation: 0
-#      shear: 0
-#      translate: 0.0
-#      flip: 0.5
-#      jitter_box: 0.1
-#      hard_pos: 0.0
-#      hard_pos_ratio: 0.0
-#      brightness: 0.2
-#      contrast: [0.6, 1.4]
-#      saturation: [0.5, 1.2]
-      normalize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
+      scale: [0.9, 1.1]
+      stretch: [[0.9, 1.1], [0.9, 1.1]]
+      rotation: 0
+      shear: 0
+      translate: 0.0
+      flip: 0.5
+      jitter_box: 0.1
+      hard_pos: 0.0
+      hard_pos_ratio: 0.0
+      brightness: 0.2
+      contrast: [0.8, 1.2]
+      saturation: [0.8, 1.1]
+      normilize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
   val:
-    input_size: [192, 192] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
+    input_size: [640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
     cache_images: disk
     pipeline:
       perspective: 0.0
-      normalize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
+      normilize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
   bench_test:
     input_size: [2456, 2054] #[1920, 1088]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      normilize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
+      normilize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
 device:
   gpu_ids: [0]
   workers_per_gpu: 2
@@ -103,8 +113,8 @@ schedule:
     weight_decay: 0.05
   warmup:
     name: linear
-    steps: 350
-    ratio: 0.0001
+    steps: 3
+    ratio: 0.001
   total_epochs: 100
   lr_schedule:
     name: LinearLR
@@ -114,11 +124,11 @@ schedule:
     last_epoch: -1
     verbose: False
   val_intervals: 2
-  effective_batchsize: -1
+  effective_batchsize: 128
 evaluator:
   name: CocoDetectionEvaluator
   save_key: mAP
 log:
   interval: 10
 
-class_names: ['player']
+class_names: ["poaceae", "brassicaceae"]

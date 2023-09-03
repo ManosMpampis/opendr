@@ -83,14 +83,14 @@ class ConvBnAct(nn.Module):
     def __init__(self, in_chs, out_chs, kernel_size, stride=1, activation="ReLU"):
         super(ConvBnAct, self).__init__()
         self.conv = nn.Conv2d(
-            in_chs, out_chs, kernel_size, stride, kernel_size // 2, bias=False
+            in_chs, out_chs, kernel_size, stride, kernel_size // 2, bias=False, #True, #False,
         )
-        self.bn1 = nn.BatchNorm2d(out_chs)
+        self.bn1 = nn.BatchNorm2d(out_chs) #
         self.act1 = act_layers(activation)
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.bn1(x)
+        x = self.bn1(x) #
         x = self.act1(x)
         return x
 
@@ -106,9 +106,9 @@ class GhostModule(nn.Module):
 
         self.primary_conv = nn.Sequential(
             nn.Conv2d(
-                inp, init_channels, kernel_size, stride, kernel_size // 2, bias=False
+                inp, init_channels, kernel_size, stride, kernel_size // 2, bias=False, #True, #False,
             ),
-            nn.BatchNorm2d(init_channels),
+            nn.BatchNorm2d(init_channels), #
             act_layers(activation) if activation else nn.Sequential(),
         )
 
@@ -120,9 +120,9 @@ class GhostModule(nn.Module):
                 1,
                 dw_size // 2,
                 groups=init_channels,
-                bias=False,
+                bias=False, #True, #False,
             ),
-            nn.BatchNorm2d(new_channels),
+            nn.BatchNorm2d(new_channels), #
             act_layers(activation) if activation else nn.Sequential(),
         )
 
@@ -162,9 +162,9 @@ class GhostBottleneck(nn.Module):
                 stride=stride,
                 padding=(dw_kernel_size - 1) // 2,
                 groups=mid_chs,
-                bias=False,
+                bias=False #True, #False,
             )
-            self.bn_dw = nn.BatchNorm2d(mid_chs)
+            self.bn_dw = nn.BatchNorm2d(mid_chs) #
 
         # Squeeze-and-excitation
         if has_se:
@@ -187,11 +187,11 @@ class GhostBottleneck(nn.Module):
                     stride=stride,
                     padding=(dw_kernel_size - 1) // 2,
                     groups=in_chs,
-                    bias=False,
+                    bias=False #True, #False,,
                 ),
-                nn.BatchNorm2d(in_chs),
-                nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False),
-                nn.BatchNorm2d(out_chs),
+                nn.BatchNorm2d(in_chs), #
+                nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False), #True,False),
+                nn.BatchNorm2d(out_chs), #
             )
 
     @torch.jit.unused
@@ -204,7 +204,7 @@ class GhostBottleneck(nn.Module):
         # Depth-wise convolution
         if self.stride > 1:
             x = self.conv_dw(x)
-            x = self.bn_dw(x)
+            x = self.bn_dw(x) #
 
         # Squeeze-and-excitation
         if self.se is not None:
@@ -264,8 +264,8 @@ class GhostNet(nn.Module):
 
         # building first layer
         output_channel = _make_divisible(16 * width_mult, 4)
-        self.conv_stem = nn.Conv2d(3, output_channel, 3, 2, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(output_channel)
+        self.conv_stem = nn.Conv2d(3, output_channel, 3, 2, 1, bias=False) #True), #False,)
+        self.bn1 = nn.BatchNorm2d(output_channel) #
         self.act1 = act_layers(self.activation)
         input_channel = output_channel
 
@@ -304,7 +304,7 @@ class GhostNet(nn.Module):
 
     def forward(self, x):
         x = self.conv_stem(x)
-        x = self.bn1(x)
+        x = self.bn1(x) #
         x = self.act1(x)
         output = []
         for i in range(10):

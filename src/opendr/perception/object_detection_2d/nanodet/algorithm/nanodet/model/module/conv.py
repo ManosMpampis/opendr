@@ -138,10 +138,12 @@ class ConvQuant(nn.Module):
         prepare_save(model_fused, True)
 
 
-class DWConvQuant(ConvQuant):
+class DWConvQuant(nn.Module):
     # Depth-wise convolution
-    def __init__(self, c1, c2, k=1, s=1, d=1, act=True, p=None, g=None):  # ch_in, ch_out, kernel, stride, dilation, activation
-        super().__init__(c1, c2, k, s, g=math.gcd(c1, c2), d=d, act=act)
+    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None):
+        super().__init__()
+        self.depthwise = ConvQuant(c1, c1, k, s=s, p=p, d=d, g=c1, act=act)
+        self.pointwise = ConvQuant(c1, c2, k=1, s=1, p=0, act=act)
 
 
 class Conv(nn.Module):
@@ -161,10 +163,14 @@ class Conv(nn.Module):
         return self.act(self.conv(x))
 
 
-class DWConv(Conv):
-    # Depth-wise convolution
-    def __init__(self, c1, c2, k=1, s=1, d=1, act=True, p=None, g=None):  # ch_in, ch_out, kernel, stride, dilation, activation
-        super().__init__(c1, c2, k, s, g=math.gcd(c1, c2), d=d, act=act)
+class DWConv(nn.Module):
+    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None):
+        super().__init__()
+        self.depthwise = Conv(c1, c1, k, s=s, p=p, d=d, g=c1, act=act)
+        self.pointwise = Conv(c1, c2, k=1, s=1, p=0, act=act)
+
+    def forward(self, x):
+        return self.pointwise(self.depthwise(x))
 
 
 class ConvModule(nn.Module):

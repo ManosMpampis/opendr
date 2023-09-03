@@ -20,6 +20,32 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch.one_stage_detector import OneStageDetector
 
 
+def _load_hparam(model: str):
+    from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import (load_config, cfg)
+    import os
+    from pathlib import Path
+
+    """ Load hyperparameters for nanodet models and training configuration
+
+    :parameter model: The name of the model of which we want to load the config file
+    :type model: str
+    :return: config with hyperparameters
+    :rtype: dict
+    """
+    # assert (
+    #         model in _MODEL_NAMES
+    # ), f"Invalid model selected. Choose one of {_MODEL_NAMES}."
+    full_path = list()
+    path = Path(__file__).parent.parent.parent.parent.parent / "algorithm" / "config"
+    wanted_file = "nanodet_{}.yml".format(model)
+    for root, dir, files in os.walk(path):
+        if wanted_file in files:
+            full_path.append(os.path.join(root, wanted_file))
+    assert (len(full_path) == 1), f"You must have only one nanodet_{model}.yaml file in your config folder"
+    load_config(cfg, full_path[0])
+    return cfg
+
+
 class NanoDetPlus(OneStageDetector):
     def __init__(
         self,
@@ -56,3 +82,28 @@ class NanoDetPlus(OneStageDetector):
         aux_head_out = self.aux_head(dual_fpn_feat)
         loss, loss_states = self.head.loss(head_out, gt_meta, aux_preds=aux_head_out)
         return head_out, loss, loss_states
+
+
+if __name__ == '__main__':
+    cfg = _load_hparam("test_plus")
+    model_cfg = copy.deepcopy(cfg.model)
+    name = model_cfg.arch.pop("name")
+    assert name == "NanoDetPlus"
+
+    model = NanoDetPlus(
+        **model_cfg.arch
+    ).eval()
+
+    print(model)
+    print("=========================================")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)
+    print("=========================================")
+    model.fuse()
+    print(model)
+    print("=========================================")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)
+    print("=========================================")

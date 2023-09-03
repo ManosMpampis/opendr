@@ -78,7 +78,7 @@ class NanoDetPlusHead(nn.Module):
         self.ConvModule = DepthwiseConvModule if use_depthwise else ConvModule
 
         self.loss_cfg = loss
-        self.norm_cfg = norm_cfg
+        self.norm_cfg = norm_cfg #None
 
         self.assigner = DynamicSoftLabelAssigner(**assigner_cfg)
         self.distribution_project = Integral(self.reg_max)
