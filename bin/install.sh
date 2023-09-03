@@ -6,7 +6,7 @@ export DISABLE_BCOLZ_AVX2=true
 
 if [[ -z "${OPENDR_DEVICE}" ]]; then
   echo "[INFO] Set available device to CPU. You can manually change this by running 'export OPENDR_DEVICE=gpu'."
-  export OPENDR_DEVICE=cpu
+  export OPENDR_DEVICE=gpu
 fi
 
 if [[ -z "${ROS_DISTRO}" ]]; then
@@ -26,8 +26,8 @@ git submodule init
 git submodule update
 
 # Create a virtual environment and update
-python3 -m venv venv_new
-source venv_new/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 python3 -m pip install -U pip
 python3 -m pip install setuptools configparser
 
@@ -58,14 +58,8 @@ fi
 
 # If working on GPU install GPU dependencies as needed
 if [[ "${OPENDR_DEVICE}" == "gpu" ]]; then
-  python3 -m pip uninstall -y mxnet
   python3 -m pip uninstall -y torch
-  echo "[INFO] Replacing  mxnet-cu112==1.8.0post0 to enable CUDA acceleration."
-  python3 -m pip install mxnet-cu116
-  echo "[INFO] Replacing torch==1.9.0+cu111 to enable CUDA acceleration."
-  python3 -m pip install install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
-  echo "[INFO] Reinstalling detectronv2."
-  python3 -m pip install 'git+https://github.com/facebookresearch/detectron2.git@5aeb252b194b93dc2879b4ac34bc51a31b5aee13'
+  pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
 fi
 
 make libopendr
