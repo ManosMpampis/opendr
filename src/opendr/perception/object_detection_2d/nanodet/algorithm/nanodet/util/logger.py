@@ -401,6 +401,7 @@ class NanoDetLightningTensorboardLogger(TensorBoardLogger):
             for i in range(10):
                 text = text.replace(f"{i}\n", f"{i}]\n")
             text = text.replace("\n", "\n\t  ")
+        if not self.verbose_only:
             self.experiment.add_text("config", f"\t{text}")
         return
 

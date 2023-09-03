@@ -27,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.005)
     parser.add_argument("--warmup-steps", help="iterations of warmup", type=int, default=3)
     parser.add_argument("--checkpoint-freq", help="Frequency in-between checkpoint saving and evaluations",
-                        type=int, default=10)
+                        type=int, default=1)
     parser.add_argument("--n-epochs", help="Number of total epochs", type=int, default=500)
     parser.add_argument("--resume-from", help="Epoch to load checkpoint file and resume training from",
                         type=int, default=0)

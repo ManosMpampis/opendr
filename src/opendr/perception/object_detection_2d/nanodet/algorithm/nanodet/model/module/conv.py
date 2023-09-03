@@ -93,26 +93,62 @@ class ConvPool(nn.Module):
         return self.act(self.pool(self.conv(x)))
 
 
-class ConvQuant(nn.Module):
-    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
+class DWConvQuant(nn.Module):
+    # Depth-wise convolution
+    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None):
+        super().__init__()
+        self.depthwise = ConvQuant(c1, c1, k, s=s, p=p, d=d, g=c1, act=act)
+        self.pointwise = ConvQuant(c1, c2, k=1, s=1, p=0, act=act)
+
+    def forward(self, x):
+        return self.pointwise(self.depthwise(x))
+
+class Conv(nn.Module):
+    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
+    default_act = nn.SiLU()  # default activation
 
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
-        self.act = nn.ReLU(inplace=True) if act else nn.Identity()  # default activation
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        self.init_weights()
+
+    def forward(self, x):
+        return self.act(self.bn(self.conv(x)))
+
+    def forward_fuse(self, x):
+        return self.act(self.conv(x))
+
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, Conv) or isinstance(m, ConvQuant):
+                nonlinearity = "leaky_relu" if isinstance(self.act, nn.LeakyReLU) else "relu"
+                a = m.act.negative_slope if isinstance(self.act, nn.LeakyReLU) else 0
+                nn.init.kaiming_normal_(
+                    m.conv.weight, mode="fan_out", nonlinearity=nonlinearity, a=a
+                )
+                m.bn.weight.data.fill_(1)
+                m.bn.bias.data.zero_()
+
+
+class ConvQuant(Conv):
+    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+        super(ConvQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
         self.quant = torch.quantization.QuantStub()
         self.dequant = torch.quantization.DeQuantStub()
 
     def forward(self, x):
         x = self.quant(x)
-        x = self.act(self.bn(self.conv(x)))
+        x = super().forward(x)
         x = self.dequant(x)
         return x
 
     def forward_fuse(self, x):
         x = self.quant(x)
-        x = self.conv(x)
+        x = super().forward_fuse(x)
         x = self.dequant(x)
         return x
 
@@ -136,31 +172,6 @@ class ConvQuant(nn.Module):
         print(model_fused)
 
         prepare_save(model_fused, True)
-
-
-class DWConvQuant(nn.Module):
-    # Depth-wise convolution
-    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None):
-        super().__init__()
-        self.depthwise = ConvQuant(c1, c1, k, s=s, p=p, d=d, g=c1, act=act)
-        self.pointwise = ConvQuant(c1, c2, k=1, s=1, p=0, act=act)
-
-
-class Conv(nn.Module):
-    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
-    default_act = nn.SiLU()  # default activation
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
-        super().__init__()
-        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
-        self.bn = nn.BatchNorm2d(c2)
-        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
-
-    def forward(self, x):
-        return self.act(self.bn(self.conv(x)))
-
-    def forward_fuse(self, x):
-        return self.act(self.conv(x))
 
 
 class DWConv(nn.Module):

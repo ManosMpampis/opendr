@@ -38,7 +38,7 @@ class SimpleCnn_2(nn.Module):
         self.conv_3 = conv(8, 8, k=3, s=2, p=1, act=act_layers(self.activation))
         self.conv_4 = conv(8, 8, k=3, s=2, p=1, act=act_layers(self.activation))
 
-        self.init_weights(pretrain=pretrain)
+        # self.init_weights(pretrain=pretrain)
 
     def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers
         for m in self.modules():
@@ -61,19 +61,14 @@ class SimpleCnn_2(nn.Module):
             self.load_state_dict(pretrained_state_dict, strict=False)
         else:
             for m in self.modules():
-                if self.activation == "LeakyReLU":
-                    nonlinearity = "leaky_relu"
-                    a = self.act.negative_slope
-                else:
-                    nonlinearity = "relu"
-                    a = 0
-                if isinstance(m, nn.Conv2d):
+                if isinstance(m, Conv) or isinstance(m, ConvQuant):
+                    nonlinearity = "leaky_relu" if self.activation == "LeakyReLU" else "relu"
+                    a = m.act.negative_slope if self.activation == "LeakyReLU" else 0
                     nn.init.kaiming_normal_(
-                        m.weight, mode="fan_out", nonlinearity=nonlinearity, a=0
+                        m.conv.weight, mode="fan_out", nonlinearity=nonlinearity, a=a
                     )
-                elif isinstance(m, nn.BatchNorm2d):
-                    m.weight.data.fill_(1)
-                    m.bias.data.zero_()
+                    m.bn.weight.data.fill_(1)
+                    m.bn.bias.data.zero_()
 
 
 if __name__ == '__main__':

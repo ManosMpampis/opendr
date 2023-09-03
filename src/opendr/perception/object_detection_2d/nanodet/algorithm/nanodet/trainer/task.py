@@ -317,13 +317,14 @@ class TrainingTask(LightningModule):
         """
         # warm up lr
         if self.trainer.current_epoch <= self.cfg.schedule.warmup.steps:
+            warmup_batches = (self.cfg.schedule.warmup.steps * self.trainer.num_training_batches)
             if self.cfg.schedule.warmup.name == "constant":
                 k = self.cfg.schedule.warmup.ratio
             elif self.cfg.schedule.warmup.name == "linear":
-                k = 1 - (1 - self.trainer.global_step / self.cfg.schedule.warmup.steps) *\
+                k = 1 - (1 - self.trainer.global_step / warmup_batches) *\
                     (1 - self.cfg.schedule.warmup.ratio)
             elif self.cfg.schedule.warmup.name == "exp":
-                k = self.cfg.schedule.warmup.ratio ** (1 - self.trainer.global_step / self.cfg.schedule.warmup.steps)
+                k = self.cfg.schedule.warmup.ratio ** (1 - self.trainer.current_epoch / warmup_batches)
             else:
                 raise Exception("Unsupported warm up type!")
             for pg in optimizer.param_groups:

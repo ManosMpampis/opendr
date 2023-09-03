@@ -713,6 +713,7 @@ class NanodetLearner(Learner):
                 save_dir=save_dir,
                 verbose_only=False if logging else True
             )
+            self.logger.dump_cfg(self.cfg)
 
         if seed != '' or seed is not None:
             if self.logger:
