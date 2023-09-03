@@ -15,16 +15,16 @@
 
 import cv2
 import numpy as np
-import mxnet as mx
-import gluoncv.data.transforms.image as timage
+# import mxnet as mx
+# import gluoncv.data.transforms.image as timage
 
 
-def np_to_mx(img_np):
-    """
-    Convert numpy image to MXNet image.
-    """
-    img_mx = mx.image.image.nd.from_numpy(np.float32(img_np))
-    return img_mx
+# def np_to_mx(img_np):
+#     """
+#     Convert numpy image to MXNet image.
+#     """
+#     img_mx = mx.image.image.nd.from_numpy(np.float32(img_np))
+#     return img_mx
 
 
 def bbox_to_np(bbox):
@@ -44,12 +44,12 @@ class BoundingBoxListToNumpyArray:
         return np.asarray([bbox_to_np(bbox) for bbox in bbox_list.data])
 
 
-class ImageToNDArrayTransform:
-    """
-    Transform object to convert OpenDR Image to MXNext image.
-    """
-    def __call__(self, img):
-        return np_to_mx(img.data)
+# class ImageToNDArrayTransform:
+#     """
+#     Transform object to convert OpenDR Image to MXNext image.
+#     """
+#     def __call__(self, img):
+#         return np_to_mx(img.data)
 
 
 class ImageToNumpyArrayTransform:
@@ -80,83 +80,83 @@ class ResizeImageAndBoxesTransform:
         return img, labels
 
 
-def transform_test_resize(imgs, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), w=640, h=480):
-    """
-    Function adapted from gluoncv.data.transforms.presets.ssd, resizes the image to a preset size.
-    :param imgs:
-    :type imgs:
-    :param mean:
-    :type mean:
-    :param std:
-    :type std:
-    :param w: Desired width of the output tensor.
-    :type w: int
-    :param h: Desired height of the output tensor.
-    :type h: int
-    :return:
-    :rtype:
-    """
-    if isinstance(imgs, mx.nd.NDArray):
-        imgs = [imgs]
-    for im in imgs:
-        assert isinstance(im, mx.nd.NDArray), "Expect NDArray, got {}".format(type(im))
-
-    tensors = []
-    origs = []
-    for img in imgs:
-        img = timage.imresize(img, w, h)
-        orig_img = img.asnumpy().astype('uint8')
-        img = mx.nd.image.to_tensor(img)
-        img = mx.nd.image.normalize(img, mean=mean, std=std)
-        tensors.append(img.expand_dims(0))
-        origs.append(orig_img)
-    if len(tensors) == 1:
-        return tensors[0], origs[0]
-    return tensors, origs
-
-
-def transform_test(imgs, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-    """
-    Function dapted from gluoncv.data.transforms.presets.ssd, normalizes and converts image to tensor.
-    :param imgs:
-    :type imgs:
-    :param mean:
-    :type mean:
-    :param std:
-    :type std:
-    :return:
-    :rtype:
-    """
-    if isinstance(imgs, mx.nd.NDArray):
-        imgs = [imgs]
-    for im in imgs:
-        assert isinstance(im, mx.nd.NDArray), "Expect NDArray, got {}".format(type(im))
-
-    tensors = []
-    origs = []
-    for img in imgs:
-        orig_img = img.asnumpy().astype('uint8')
-        img = mx.nd.image.to_tensor(img)
-        img = mx.nd.image.normalize(img, mean=mean, std=std)
-        tensors.append(img.expand_dims(0))
-        origs.append(orig_img)
-    if len(tensors) == 1:
-        return tensors[0], origs[0]
-    return tensors, origs
+# def transform_test_resize(imgs, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), w=640, h=480):
+#     """
+#     Function adapted from gluoncv.data.transforms.presets.ssd, resizes the image to a preset size.
+#     :param imgs:
+#     :type imgs:
+#     :param mean:
+#     :type mean:
+#     :param std:
+#     :type std:
+#     :param w: Desired width of the output tensor.
+#     :type w: int
+#     :param h: Desired height of the output tensor.
+#     :type h: int
+#     :return:
+#     :rtype:
+#     """
+#     if isinstance(imgs, mx.nd.NDArray):
+#         imgs = [imgs]
+#     for im in imgs:
+#         assert isinstance(im, mx.nd.NDArray), "Expect NDArray, got {}".format(type(im))
+#
+#     tensors = []
+#     origs = []
+#     for img in imgs:
+#         img = timage.imresize(img, w, h)
+#         orig_img = img.asnumpy().astype('uint8')
+#         img = mx.nd.image.to_tensor(img)
+#         img = mx.nd.image.normalize(img, mean=mean, std=std)
+#         tensors.append(img.expand_dims(0))
+#         origs.append(orig_img)
+#     if len(tensors) == 1:
+#         return tensors[0], origs[0]
+#     return tensors, origs
 
 
-def pad_test(img, min_size=512):
-    h_pad_size = 0
-    min_dim = 2 + np.argmin([img.shape[2:4]])
-    img_padded = img
-    if img.shape[min_dim] < min_size:
-        h_pad_size = int((min_size - img.shape[min_dim]) / 2.0)
-        if min_dim == 2:
-            img_padded = mx.nd.pad(img, mode="constant", constant_value=0,
-                                   pad_width=(0, 0, 0, 0, h_pad_size,
-                                              h_pad_size, 0, 0))
-        else:
-            img_padded = mx.nd.pad(img, mode="constant", constant_value=0,
-                                   pad_width=(0, 0, 0, 0, 0, 0,
-                                              h_pad_size, h_pad_size))
-    return img_padded
+# def transform_test(imgs, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+#     """
+#     Function dapted from gluoncv.data.transforms.presets.ssd, normalizes and converts image to tensor.
+#     :param imgs:
+#     :type imgs:
+#     :param mean:
+#     :type mean:
+#     :param std:
+#     :type std:
+#     :return:
+#     :rtype:
+#     """
+#     if isinstance(imgs, mx.nd.NDArray):
+#         imgs = [imgs]
+#     for im in imgs:
+#         assert isinstance(im, mx.nd.NDArray), "Expect NDArray, got {}".format(type(im))
+#
+#     tensors = []
+#     origs = []
+#     for img in imgs:
+#         orig_img = img.asnumpy().astype('uint8')
+#         img = mx.nd.image.to_tensor(img)
+#         img = mx.nd.image.normalize(img, mean=mean, std=std)
+#         tensors.append(img.expand_dims(0))
+#         origs.append(orig_img)
+#     if len(tensors) == 1:
+#         return tensors[0], origs[0]
+#     return tensors, origs
+
+
+# def pad_test(img, min_size=512):
+#     h_pad_size = 0
+#     min_dim = 2 + np.argmin([img.shape[2:4]])
+#     img_padded = img
+#     if img.shape[min_dim] < min_size:
+#         h_pad_size = int((min_size - img.shape[min_dim]) / 2.0)
+#         if min_dim == 2:
+#             img_padded = mx.nd.pad(img, mode="constant", constant_value=0,
+#                                    pad_width=(0, 0, 0, 0, h_pad_size,
+#                                               h_pad_size, 0, 0))
+#         else:
+#             img_padded = mx.nd.pad(img, mode="constant", constant_value=0,
+#                                    pad_width=(0, 0, 0, 0, 0, 0,
+#                                               h_pad_size, h_pad_size))
+#     return img_padded
