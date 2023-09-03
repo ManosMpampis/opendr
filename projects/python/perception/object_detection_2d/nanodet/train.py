@@ -23,8 +23,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="test_big")
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=-1)
-    parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.005)
+    parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=1)
+    parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.0005)
     parser.add_argument("--warmup-steps", help="iterations of warmup", type=int, default=3)
     parser.add_argument("--checkpoint-freq", help="Frequency in-between checkpoint saving and evaluations",
                         type=int, default=1)
@@ -47,8 +47,9 @@ if __name__ == '__main__':
     dataset = XMLBasedDataset(root=f'{data_root}/train', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
 
-    val_dataset = XMLBasedDataset(root=f'{data_root}/val', dataset_type=dataset_type, images_dir='images',
-                                  annotations_dir='annotations', classes=classes)
+    # val_dataset = XMLBasedDataset(root=f'{data_root}/val', dataset_type=dataset_type, images_dir='images',
+    #                               annotations_dir='annotations', classes=classes)
+    val_dataset = None
 
     nanodet = NanodetLearner(model_to_use=args.model, iters=args.n_epochs, lr=args.lr, batch_size=args.batch_size,
                              checkpoint_after_iter=args.checkpoint_freq, checkpoint_load_iter=args.resume_from,

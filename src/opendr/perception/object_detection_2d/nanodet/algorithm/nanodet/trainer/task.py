@@ -316,7 +316,7 @@ class TrainingTask(LightningModule):
             using_lbfgs: True if the matching optimizer is lbfgs
         """
         # warm up lr
-        if self.trainer.current_epoch <= self.cfg.schedule.warmup.steps:
+        if self.trainer.current_epoch < self.cfg.schedule.warmup.steps:
             warmup_batches = (self.cfg.schedule.warmup.steps * self.trainer.num_training_batches)
             if self.cfg.schedule.warmup.name == "constant":
                 k = self.cfg.schedule.warmup.ratio
@@ -327,11 +327,13 @@ class TrainingTask(LightningModule):
                 k = self.cfg.schedule.warmup.ratio ** (1 - self.trainer.current_epoch / warmup_batches)
             else:
                 raise Exception("Unsupported warm up type!")
-            for pg in optimizer.param_groups:
-                pg["lr"] = pg["initial_lr"] * k
+        else:
+            k = 1
+        for pg in optimizer.param_groups:
+            pg["lr"] = pg["initial_lr"] * k
 
         # update params
-        if (optimizer_idx + 1) % self.accumulate == 0:
+        if (batch_idx + 1) % self.accumulate == 0:
             optimizer.step(closure=optimizer_closure)
             optimizer.zero_grad()
         else:

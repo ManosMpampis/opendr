@@ -123,11 +123,11 @@ schedule:
     last_epoch: -1
     verbose: False
   val_intervals: 2
-  effective_batchsize: 128
+  effective_batchsize: 1 #128
 evaluator:
   name: CocoDetectionEvaluator
   save_key: mAP
 log:
-  interval: 10
+  interval: 1 #10
 
 class_names: ["poaceae", "brassicaceae"]
