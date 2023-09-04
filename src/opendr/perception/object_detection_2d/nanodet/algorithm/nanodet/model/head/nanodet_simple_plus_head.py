@@ -160,20 +160,20 @@ class SimplifierNanoDetPlusHead(nn.Module):
         self.gfl_cls1 = nn.Conv2d(self.feat_channels, self.num_classes + 4 * (self.reg_max + 1), 1, padding=0)
 
     def _buid_not_shared_head(self):
-        # cls_convs = nn.ModuleList()
-        # for i in range(self.stacked_convs):
-        #     chn = self.in_channels if i == 0 else self.feat_channels
-        #     cls_convs.append(
-        #         self.ConvModule(
-        #             chn,
-        #             self.feat_channels,
-        #             k=self.kernel_size,
-        #             s=1,
-        #             p=self.kernel_size // 2,
-        #             act=act_layers(self.activation),
-        #         )
-        #     )
-        cls_convs = self.ConvModule(self.in_channels, self.feat_channels, k=self.kernel_size, s=1, p=self.kernel_size // 2, act=act_layers(self.activation))
+        cls_convs = nn.ModuleList()
+        for i in range(self.stacked_convs):
+            chn = self.in_channels if i == 0 else self.feat_channels
+            cls_convs.append(
+                self.ConvModule(
+                    chn,
+                    self.feat_channels,
+                    k=self.kernel_size,
+                    s=1,
+                    p=self.kernel_size // 2,
+                    act=act_layers(self.activation),
+                )
+            )
+        cls_convs = nn.Sequential(*cls_convs)
         return cls_convs
 
     def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers

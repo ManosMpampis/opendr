@@ -511,7 +511,6 @@ class NanodetLearner(Learner):
             post_process_scripted.save(export_path_pth)
             del post_process_scripted
 
-        print(torch.__version__[2:4])
         if not os.path.exists(export_path_onnx):
             assert torch.__version__[2:4] == "13",\
                 f"tensorRT onnx parser is not compatible with resize implementations of pytorch before version 1.13.0." \
@@ -537,10 +536,11 @@ class NanodetLearner(Learner):
 
         inputs = [network.get_input(i) for i in range(network.num_inputs)]
         outputs = [network.get_output(i) for i in range(network.num_outputs)]
-        for inp in inputs:
-            print(f'TensorRT: input "{inp.name}" with shape{inp.shape} {inp.dtype}')
-        for out in outputs:
-            print(f'TensorRT: output "{out.name}" with shape{out.shape} {out.dtype}')
+        if verbose:
+            for inp in inputs:
+                print(f'TensorRT: input "{inp.name}" with shape{inp.shape} {inp.dtype}')
+            for out in outputs:
+                print(f'TensorRT: output "{out.name}" with shape{out.shape} {out.dtype}')
 
         im = self.__dummy_input(hf=hf)[0]
         if dynamic:

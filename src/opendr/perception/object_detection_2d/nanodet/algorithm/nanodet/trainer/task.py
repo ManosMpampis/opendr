@@ -48,6 +48,7 @@ class TrainingTask(LightningModule):
         self.accumulate = accumulate
         self.classes = cfg.class_names
         self.model = model
+        self.val_losses = {}
         self.qat = qat
         if qat:
             self.model.eval()
@@ -112,7 +113,7 @@ class TrainingTask(LightningModule):
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
             lr = self.optimizers().param_groups[0]["lr"]
             log_msg = "Train|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
-                self.current_epoch + 1,
+                self.current_epoch,
                 self.cfg.schedule.total_epochs,
                 (self.global_step+1),
                 batch_idx + 1,
@@ -155,28 +156,51 @@ class TrainingTask(LightningModule):
         else:
             preds, loss, loss_states = self.model.forward_train(batch)
 
-        if (batch_idx + 1) % self.cfg.log.interval == 0:
+        # zero all losses
+        if batch_idx == 0:
+            self.val_losses = {}
+            for loss_name in loss_states:
+                if not (loss_name in self.val_losses):
+                    self.val_losses[loss_name] = 0
+        # update losses
+        for loss_name in loss_states:
+            self.val_losses[loss_name] += loss_states[loss_name].mean().item()
+
+        if batch_idx % self.cfg.log.interval == 0:
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
             lr = self.optimizers().param_groups[0]["lr"]
             log_msg = "Val|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
-                self.current_epoch + 1,
+                self.current_epoch,
                 self.cfg.schedule.total_epochs,
-                (self.global_step+1),
-                batch_idx + 1,
+                (self.current_epoch + 1) * batch_idx,
+                batch_idx,
                 sum(self.trainer.num_val_batches),
                 memory,
                 lr,
             )
-            for loss_name in loss_states:
-                log_msg += "{}:{:.4f}| ".format(
-                    loss_name, loss_states[loss_name].mean().item()
-                )
+            if self.logger:
+                self.info(log_msg)
 
+        if (batch_idx + 1) == sum(self.trainer.num_val_batches):
+            memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
+            lr = self.optimizers().param_groups[0]["lr"]
+            log_msg = "Val|Epoch{}/{}|Iter{}| mem:{:.3g}G| lr:{:.2e}| ".format(
+                self.current_epoch,
+                self.cfg.schedule.total_epochs,
+                self.global_step,
+                memory,
+                lr,
+            )
+            for loss_name in self.val_losses:
+                log_msg += "{}:{:.4f}| ".format(
+                    loss_name, loss_states[loss_name]
+                )
                 self.scalar_summary(
                     "Val_loss/" + loss_name,
-                    loss_states[loss_name].mean().item(),
+                    self.val_losses[loss_name] / sum(self.trainer.num_val_batches),
                     (self.global_step+1),
                 )
+
             if self.logger:
                 self.info(log_msg)
 
@@ -327,10 +351,8 @@ class TrainingTask(LightningModule):
                 k = self.cfg.schedule.warmup.ratio ** (1 - self.trainer.current_epoch / warmup_batches)
             else:
                 raise Exception("Unsupported warm up type!")
-        else:
-            k = 1
-        for pg in optimizer.param_groups:
-            pg["lr"] = pg["initial_lr"] * k
+            for pg in optimizer.param_groups:
+                pg["lr"] = pg["initial_lr"] * k
 
         # update params
         if (batch_idx + 1) % self.accumulate == 0:

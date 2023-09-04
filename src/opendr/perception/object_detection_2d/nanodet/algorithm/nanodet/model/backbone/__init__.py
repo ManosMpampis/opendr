@@ -24,6 +24,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backb
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.simpleConv import SimpleCnn
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.simpleConv_2 import SimpleCnn_2
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.simpleConv_3 import VggBackbone
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_ghostnet import GhostNetSmall
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_mobilenetv2 import MobileNetV2Small
@@ -66,5 +67,7 @@ def build_backbone(cfg):
         return SimpleCnn(**backbone_cfg)
     elif name == "SimpleCnn_2":
         return SimpleCnn_2(**backbone_cfg)
+    elif name == "SimpleCnn_3":
+        return VggBackbone(**backbone_cfg)
     else:
         raise NotImplementedError

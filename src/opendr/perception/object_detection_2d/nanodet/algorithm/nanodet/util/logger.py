@@ -256,7 +256,8 @@ class NanoDetLightningLogger(LightningLoggerBase):
             for i in range(10):
                 text = text.replace(f"{i}\n", f"{i}]\n")
             text = text.replace("\n", "\n\t  ")
-            self.experiment.add_text("config", f"\t{text}")
+            if not self.verbose_only:
+                self.experiment.add_text("config", f"\t{text}")
         return
     #         dict_cfg = cfg_node.convert_to_dict(cfg_node, [])
     #         text = self.pretty_json(dict_cfg)
