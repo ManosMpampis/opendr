@@ -28,25 +28,41 @@ class GhostConv(nn.Module):
         super().__init__()
         conv = ConvQuant if quant else Conv
         c_ = c2 // 2  # hidden channels
-        self.cv1 = conv(c1, c_, k, s, None, g, act=act)
-        self.cv2 = conv(c_, c_, 3, 1, None, c_, act=act)
+        # c_ = c2
+        self.primary_conv = conv(c1, c_, k, s, None, g, act=act)
+        self.cheap_operation = conv(c_, c_, 3, 1, None, c_, act=act)
 
     def forward(self, x):
-        y = self.cv1(x)
-        return torch.cat((y, self.cv2(y)), 1)
+        x = self.primary_conv(x)
+        return torch.cat((x, self.cheap_operation(x)), 1)
 
 
 class GhostBottleneck(nn.Module):
     # Ghost Bottleneck https://github.com/huawei-noah/ghostnet
-    def __init__(self, c1, c2, act=True, quant=False):  # ch_in, ch_out
+    def __init__(self, c1, c_, c2, act=True, quant=False):  # ch_in, ch_out
         super().__init__()
-        c_ = c2 // 2
         self.conv = nn.Sequential(
             GhostConv(c1, c_, 1, 1, act=act, quant=quant),  # pw
-            GhostConv(c_, c2, 1, 1, act=False, quant=quant))  # pw-linear
+            GhostConv(c_ , c2, 1, 1, act=False, quant=quant))  # pw-linear
+        self.shortcut = nn.Sequential(
+            nn.Conv2d(
+                c1,
+                c1,
+                3,
+                stride=1,
+                padding=(3 - 1) // 2,
+                groups=c1,
+                bias=False  # True, #False,,
+            ),
+            nn.BatchNorm2d(c1),  #
+            nn.Conv2d(c1, c2, 1, stride=1, padding=0, bias=False),  # True,False),
+            nn.BatchNorm2d(c2),  #
+        )
 
     def forward(self, x):
-        return self.conv(x)
+        residual = x
+        x = self.conv(x)
+        return x + self.shortcut(residual)
 
 
 class SimpleGB(nn.Module):
@@ -70,10 +86,12 @@ class SimpleGB(nn.Module):
         super(SimpleGB, self).__init__()
 
         blocks = []
-        for _ in range(num_blocks):
+        for idx in range(num_blocks):
+            in_ch = in_channels if idx == 0 else in_channels // 2
             blocks.append(
                 GhostBottleneck(
-                    in_channels,
+                    in_ch,
+                    in_ch,
                     out_channels,
                     act=act_layers(activation),
                     quant=quant
