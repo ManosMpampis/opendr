@@ -27,9 +27,9 @@ from opendr.perception.object_detection_2d.datasets import XMLBasedDataset
 def main(args):
     path = args.original_data_path
 
-    train_set = XMLBasedDataset(root=f"{path}/train", dataset_type="weed", images_dir="images", annotations_dir="annotations", preload_anno=True)
-    val_set = XMLBasedDataset(root=f"{path}/val", dataset_type="weed", images_dir="images", annotations_dir="annotations", classes=train_set.classes)
-    test_set = XMLBasedDataset(root=f"{path}/test", dataset_type="weed", images_dir="images", annotations_dir="annotations", classes=train_set.classes)
+    val_set = XMLBasedDataset(root=f"{path}/val", dataset_type="weed", images_dir="images", annotations_dir="annotations", preload_anno=True)
+    train_set = XMLBasedDataset(root=f"{path}/train", dataset_type="weed", images_dir="images", annotations_dir="annotations", classes=val_set.classes)
+    test_set = XMLBasedDataset(root=f"{path}/test", dataset_type="weed", images_dir="images", annotations_dir="annotations", classes=val_set.classes)
 
     new_path = args.new_data_path
     os.makedirs(new_path, exist_ok=True)
@@ -58,10 +58,10 @@ def main(args):
         'train': 'train',
         'val': 'val',
         'test': 'test',
-        'names': {c: c_name for c, c_name in enumerate(train_set.classes)}
+        'names': {c: c_name for c, c_name in enumerate(val_set.classes)}
     }
 
-    with open(f'{new_path}/{train_set.dataset_type}.yaml', 'w') as yaml_file:
+    with open(f'{new_path}/{val_set.dataset_type}.yaml', 'w') as yaml_file:
         yaml.dump(d, yaml_file, default_flow_style=False)
 
     # step 2: convert annotations to .txt files
@@ -131,8 +131,8 @@ def main(args):
 if __name__ == '__main__':
     dataset_main_path = "/media/manos/hdd/allea_datasets/weedDataset"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--original-data-path", help="Dataset root", type=str, default=f"{dataset_main_path}/cropped_images_416")
-    parser.add_argument("--new-data-path", help="Path to converted dataset location", type=str, default=f"{dataset_main_path}/cropped_images_416")
+    parser.add_argument("--original-data-path", help="Dataset root", type=str, default=f"{dataset_main_path}/cropped_mean_annot")
+    parser.add_argument("--new-data-path", help="Path to converted dataset location", type=str, default=f"{dataset_main_path}/cropped_mean_annot")
 
     args = parser.parse_args()
 
