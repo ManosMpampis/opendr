@@ -183,7 +183,7 @@ class NanodetLearner(Learner):
                 )
             )
         if self.warmup_steps is not None:
-            self.cfg.schedule.warmup.warmup_steps = self.warmup_steps
+            self.cfg.schedule.warmup.steps = self.warmup_steps
         if self.warmup_ratio is not None:
             self.cfg.schedule.warmup.warmup_ratio = self.warmup_ratio
         if self.lr_schedule_T_max is not None:
