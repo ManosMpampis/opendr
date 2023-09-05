@@ -122,7 +122,7 @@ class TrainingTask(LightningModule):
                 lr,
             )
             self.scalar_summary("Experimen_Variables/Learning Rate", lr, (self.global_step + 1))
-            self.scalar_summary("Experimen_Variables/Epoch", self.current_epoc, (self.global_step + 1))
+            self.scalar_summary("Experimen_Variables/Epoch", self.current_epoch, (self.global_step + 1))
             for loss_name in loss_states:
                 log_msg += "{}:{:.4f}| ".format(
                     loss_name, loss_states[loss_name].mean().item()
