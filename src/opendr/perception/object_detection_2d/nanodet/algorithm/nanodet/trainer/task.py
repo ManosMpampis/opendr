@@ -121,7 +121,8 @@ class TrainingTask(LightningModule):
                 memory,
                 lr,
             )
-            self.scalar_summary("Learning Rate", lr, (self.global_step + 1))
+            self.scalar_summary("Experimen_Variables/Learning Rate", lr, (self.global_step + 1))
+            self.scalar_summary("Experimen_Variables/Epoch", self.current_epoc, (self.global_step + 1))
             for loss_name in loss_states:
                 log_msg += "{}:{:.4f}| ".format(
                     loss_name, loss_states[loss_name].mean().item()
@@ -258,7 +259,7 @@ class TrainingTask(LightningModule):
                     "Warning! Save_key is not in eval results! Only save model last!"
                 )
             if self.logger:
-                self.logger.log_metrics(eval_results, self.current_epoch + 1)
+                self.logger.log_metrics(eval_results, (self.global_step+1))
         else:
             if self.logger:
                 self.info("Skip val on rank {}".format(self.local_rank))
