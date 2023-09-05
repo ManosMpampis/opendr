@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
     parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=32)
     parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.005)
-    parser.add_argument("--warmup-steps", help="iterations of warmup", type=int, default=5)
+    parser.add_argument("--warmup-steps", help="iterations of warmup", type=int, default=2)
     parser.add_argument("--checkpoint-freq", help="Frequency in-between checkpoint saving and evaluations",
                         type=int, default=1)
     parser.add_argument("--n-epochs", help="Number of total epochs", type=int, default=500)
