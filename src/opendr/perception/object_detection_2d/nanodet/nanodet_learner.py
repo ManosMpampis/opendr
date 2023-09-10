@@ -142,7 +142,7 @@ class NanodetLearner(Learner):
         # ), f"Invalid model selected. Choose one of {_MODEL_NAMES}."
         full_path = list()
         path = Path(__file__).parent / "algorithm" / "config"
-        wanted_file = "nanodet_{}.yml".format(model)
+        wanted_file = f"nanodet_{model}.yml"
         for root, dir, files in os.walk(path):
             if wanted_file in files:
                 full_path.append(os.path.join(root, wanted_file))
@@ -177,10 +177,8 @@ class NanodetLearner(Learner):
         # Nanodet specific parameters
         if self.cfg.model.arch.head.num_classes != len(self.cfg.class_names):
             raise ValueError(
-                "cfg.model.arch.head.num_classes must equal len(cfg.class_names), "
-                "but got {} and {}".format(
-                    self.cfg.model.arch.head.num_classes, len(self.cfg.class_names)
-                )
+                f"cfg.model.arch.head.num_classes must equal len(cfg.class_names), "
+                f"but got {self.cfg.model.arch.head.num_classes} and {len(self.cfg.class_names)}"
             )
         if self.warmup_steps is not None:
             self.cfg.schedule.warmup.steps = self.warmup_steps
@@ -236,18 +234,18 @@ class NanodetLearner(Learner):
                     "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes},
                     "optimized": False, "optimizer_info": {}}
 
-        metadata["model_paths"].append("nanodet_{}.pth".format(model))
+        metadata["model_paths"].append(f"nanodet_{model}.pth")
 
         if self.task is None:
-            print("You haven't called a task yet, only the state of the loaded or initialized model will be saved.")
+            self.info("You haven't called a task yet,"
+                      " only the state of the loaded or initialized model will be saved.", True)
             save_model_state(os.path.join(path, metadata["model_paths"][0]), self.model, None, verbose)
         else:
             self.task.save_current_model(os.path.join(path, metadata["model_paths"][0]), verbose)
 
-        with open(os.path.join(path, "nanodet_{}.json".format(model)), 'w', encoding='utf-8') as f:
+        with open(os.path.join(path, f"nanodet_{model}.json"), 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
-        if verbose:
-            print("Model metadata saved.")
+        self.info("Model metadata saved.", verbose)
         return
 
     def load(self, path=None, verbose=True):
@@ -262,23 +260,21 @@ class NanodetLearner(Learner):
         path = path if path is not None else self.cfg.save_dir
 
         model = self.cfg.check_point_name
-        if verbose:
-            print("Model name:", model, "-->", os.path.join(path, "nanodet_" + model + ".json"))
-        with open(os.path.join(path, "nanodet_{}.json".format(model))) as f:
+        self.info(f"Model name: {model} --> {os.path.join(path, 'nanodet_' + model + '.json')}", verbose)
+        with open(os.path.join(path, f"nanodet_{model}.json")) as f:
             metadata = json.load(f)
 
         if metadata['optimized']:
             if metadata['format'] == "onnx":
                 self._load_onnx(os.path.join(path, metadata["model_paths"][0]), verbose=verbose)
-                print("Loaded ONNX model.")
+                self.info("Loaded ONNX model.", True)
             else:
                 self._load_jit(os.path.join(path, metadata["model_paths"][0]), verbose=verbose)
-                print("Loaded JIT model.")
+                self.info("Loaded JIT model.", True)
         else:
             ckpt = torch.load(os.path.join(path, metadata["model_paths"][0]), map_location=torch.device(self.device))
             self.model = load_model_weight(self.model, ckpt, verbose)
-        if verbose:
-            print("Loaded model weights from {}".format(path))
+        self.info(f"Loaded model weights from {path}", verbose)
         pass
 
     def download(self, path=None, mode="pretrained", verbose=True,
@@ -312,59 +308,53 @@ class NanodetLearner(Learner):
 
             model = self.cfg.check_point_name
 
-            path = os.path.join(path, "nanodet_{}".format(model))
+            path = os.path.join(path, f"nanodet_{model}")
             if not os.path.exists(path):
                 os.makedirs(path)
 
-            checkpoint_file = os.path.join(path, "nanodet_{}.ckpt".format(model))
+            checkpoint_file = os.path.join(path, f"nanodet_{model}.ckpt")
             if os.path.isfile(checkpoint_file):
                 return
 
-            if verbose:
-                print("Downloading pretrained checkpoint...")
-
+            self.info("Downloading pretrained checkpoint...", verbose)
             file_url = os.path.join(url, "pretrained",
-                                    "nanodet_{}".format(model),
-                                    "nanodet_{}.ckpt".format(model))
+                                    f"nanodet_{model}",
+                                    f"nanodet_{model}.ckpt")
 
             urlretrieve(file_url, checkpoint_file)
 
-            if verbose:
-                print("Downloading pretrain weights if provided...")
-
-            file_url = os.path.join(url, "pretrained", "nanodet_{}".format(model),
-                                    "nanodet_{}.pth".format(model))
+            self.info("Downloading pretrain weights if provided...", verbose)
+            file_url = os.path.join(url, "pretrained", f"nanodet_{model}",
+                                    f"nanodet_{model}.pth")
             try:
-                pytorch_save_file = os.path.join(path, "nanodet_{}.pth".format(model))
+                pytorch_save_file = os.path.join(path, f"nanodet_{model}.pth")
                 if os.path.isfile(pytorch_save_file):
                     return
 
                 urlretrieve(file_url, pytorch_save_file)
 
-                if verbose:
-                    print("Making metadata...")
+                self.info("Making metadata...", verbose)
                 metadata = {"model_paths": [], "framework": "pytorch", "format": "pth", "has_data": False,
                             "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes},
                             "optimized": False, "optimizer_info": {}}
 
-                param_filepath = "nanodet_{}.pth".format(model)
+                param_filepath = f"nanodet_{model}.pth"
                 metadata["model_paths"].append(param_filepath)
-                with open(os.path.join(path, "nanodet_{}.json".format(model)), 'w', encoding='utf-8') as f:
+                with open(os.path.join(path, f"nanodet_{model}.json"), 'w', encoding='utf-8') as f:
                     json.dump(metadata, f, ensure_ascii=False, indent=4)
 
             except:
-                print("Pretrain weights for this model are not provided!!! \n"
-                      "Only the hole checkpoint will be download")
+                self.info("Pretrain weights for this model are not provided!!! \n"
+                          "Only the hole checkpoint will be download", True)
 
-                if verbose:
-                    print("Making metadata...")
+                self.info("Making metadata...", verbose)
                 metadata = {"model_paths": [], "framework": "pytorch", "format": "pth", "has_data": False,
                             "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes},
                             "optimized": False, "optimizer_info": {}}
 
-                param_filepath = "nanodet_{}.ckpt".format(model)
+                param_filepath = f"nanodet_{model}.ckpt"
                 metadata["model_paths"].append(param_filepath)
-                with open(os.path.join(path, "nanodet_{}.json".format(model)), 'w', encoding='utf-8') as f:
+                with open(os.path.join(path, f"nanodet_{model}.json"), 'w', encoding='utf-8') as f:
                     json.dump(metadata, f, ensure_ascii=False, indent=4)
 
         elif mode == "images":
@@ -372,8 +362,8 @@ class NanodetLearner(Learner):
             image_file = os.path.join(path, "000000000036.jpg")
             if os.path.isfile(image_file):
                 return
-            if verbose:
-                print("Downloading example image...")
+
+            self.info("Downloading example image...", verbose)
             urlretrieve(file_url, image_file)
 
         elif mode == "test_data":
@@ -386,14 +376,14 @@ class NanodetLearner(Learner):
             os.makedirs(os.path.join(path, "test_data", "val", "Annotations"), exist_ok=True)
             # download image
             file_url = os.path.join(url, "images", "000000000036.jpg")
-            if verbose:
-                print("Downloading image...")
+
+            self.info("Downloading image...", verbose)
             urlretrieve(file_url, os.path.join(path, "test_data", "train", "JPEGImages", "000000000036.jpg"))
             urlretrieve(file_url, os.path.join(path, "test_data", "val", "JPEGImages", "000000000036.jpg"))
             # download annotations
             file_url = os.path.join(url, "annotations", "000000000036.xml")
-            if verbose:
-                print("Downloading annotations...")
+
+            self.info("Downloading annotations...", verbose)
             urlretrieve(file_url, os.path.join(path, "test_data", "train", "Annotations", "000000000036.xml"))
             urlretrieve(file_url, os.path.join(path, "test_data", "val", "Annotations", "000000000036.xml"))
 
@@ -406,7 +396,7 @@ class NanodetLearner(Learner):
         try:
             width, height = self.cfg.data.bench_test.input_size
         except AttributeError as e:
-            print(f"{e}, val input will be used")
+            self.info(f"{e}, val input will be used", True)
             width, height = self.cfg.data.val.input_size
         dummy_img = divisible_padding(
             torch.empty((3, height, width), device=self.device, dtype=torch.half if hf else torch.float32),
@@ -432,7 +422,7 @@ class NanodetLearner(Learner):
                                        iou_thresh=iou_thresh, nms_max_num=nms_max_num, hf=hf)
 
         os.makedirs(onnx_path, exist_ok=True)
-        export_path = os.path.join(onnx_path, "nanodet_{}.onnx".format(self.cfg.check_point_name))
+        export_path = os.path.join(onnx_path, f"nanodet_{self.cfg.check_point_name}.onnx")
 
         dummy_input = self.__dummy_input(hf=hf)
 
@@ -453,43 +443,35 @@ class NanodetLearner(Learner):
             dynamic_axes=dynamic or None
         )
 
-        metadata = {"model_paths": ["nanodet_{}.onnx".format(self.cfg.check_point_name)], "framework": "pytorch",
+        metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.onnx"], "framework": "pytorch",
                     "format": "onnx", "has_data": False, "optimized": True, "optimizer_info": {},
                     "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
                                          "conf_threshold": conf_thresh, "iou_threshold": iou_thresh}}
 
-        with open(os.path.join(onnx_path, "nanodet_{}.json".format(self.cfg.check_point_name)),
-                  'w', encoding='utf-8') as f:
+        with open(os.path.join(onnx_path, f"nanodet_{self.cfg.check_point_name}.json"), 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
 
-        if verbose:
-            print("Finished exporting ONNX model.")
-
+        self.info("Finished exporting ONNX model.", verbose)
         try:
             import onnxsim
         except:
-            print("For compression in optimized models, install onnxsim and rerun optimize.")
+            self.info("For compression in optimized models, install onnxsim and rerun optimize.", True)
             return
 
         import onnx
-        if verbose:
-            print("Simplifying ONNX model...")
+        self.info("Simplifying ONNX model...", verbose)
         input_data = {"data": dummy_input[0].detach().cpu().numpy()}
         model_sim, flag = onnxsim.simplify(export_path, input_data=input_data)
         if flag:
             onnx.save(model_sim, export_path)
-            if verbose:
-                print("ONNX simplified successfully.")
+            self.info("ONNX simplified successfully.", verbose)
         else:
-            if verbose:
-                print("ONNX simplified failed.")
+            self.info("ONNX simplified failed.", verbose)
         return
 
     def _load_onnx(self, onnx_path, verbose=True):
         onnx_path = onnx_path[0]
-        if verbose:
-            print("Loading ONNX runtime inference session from {}".format(onnx_path))
-
+        self.info(f"Loading ONNX runtime inference session from {onnx_path}", verbose)
         self.ort_session = ort.InferenceSession(onnx_path)
         return
 
@@ -529,18 +511,16 @@ class NanodetLearner(Learner):
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
         if not parser.parse_from_file(export_path_onnx):
-            print("ERROR: parse ONNX fail!!!")
             for error in range(parser.num_errors):
-                print(parser.get_error(error))
+                self.info(parser.get_error(error), True)
             raise RuntimeError(f'Failed to parse the ONNX file: {export_path_onnx}')
 
         inputs = [network.get_input(i) for i in range(network.num_inputs)]
         outputs = [network.get_output(i) for i in range(network.num_outputs)]
-        if verbose:
-            for inp in inputs:
-                print(f'TensorRT: input "{inp.name}" with shape{inp.shape} {inp.dtype}')
-            for out in outputs:
-                print(f'TensorRT: output "{out.name}" with shape{out.shape} {out.dtype}')
+        for inp in inputs:
+            self.info(f'TensorRT: input "{inp.name}" with shape{inp.shape} {inp.dtype}', verbose)
+        for out in outputs:
+            self.info(f'TensorRT: output "{out.name}" with shape{out.shape} {out.dtype}', verbose)
 
         im = self.__dummy_input(hf=hf)[0]
         if dynamic:
@@ -552,7 +532,7 @@ class NanodetLearner(Learner):
 
         if hf:
             if not builder.platform_has_fast_fp16:
-                print("platform do not have fast fp16")
+                self.info("Platform do not have fast fp16", True)
             config.set_flag(trt.BuilderFlag.FP16)
 
         engine = builder.build_engine(network, config)
@@ -570,9 +550,7 @@ class NanodetLearner(Learner):
         return
 
     def _load_trt(self, trt_paths, verbose=True):
-        if verbose:
-            print("Loading TensorRT runtime inference session from {}".format(trt_paths[0]))
-
+        self.info(f"Loading TensorRT runtime inference session from {trt_paths[0]}", verbose)
         trt_logger_level = trt.Logger.WARNING if verbose else trt.Logger.ERROR
         TRT_LOGGER = trt.Logger(trt_logger_level)
         with open(f'{trt_paths[0]}', 'rb') as f, trt.Runtime(TRT_LOGGER) as runtime:
@@ -593,44 +571,39 @@ class NanodetLearner(Learner):
         os.makedirs(f"{jit_path}/trace", exist_ok=True)
         dummy_input = self.__dummy_input(hf=hf)
         with torch.no_grad():
-            export_path = os.path.join(jit_path, "nanodet_{}.pth".format(self.cfg.check_point_name))
+            export_path = os.path.join(jit_path, f"nanodet_{self.cfg.check_point_name}.pth")
             self.predictor.trace_model(dummy_input)
             model_scripted = torch.jit.script(self.predictor)
-            export_path_trace = os.path.join(jit_path, "trace", "nanodet_{}.pth".format(self.cfg.check_point_name))
+            export_path_trace = os.path.join(jit_path, "trace", f"nanodet_{self.cfg.check_point_name}.pth")
             model_traced = self.predictor.traced_model
 
-            metadata = {"model_paths": ["nanodet_{}.pth".format(self.cfg.check_point_name)], "framework": "pytorch",
+            metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.pth"], "framework": "pytorch",
                         "format": "pth", "has_data": False, "optimized": True, "optimizer_info": {},
                         "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
                                              "conf_threshold": conf_threshold, "iou_threshold": iou_threshold}}
             model_scripted.save(export_path)
 
-            with open(os.path.join(jit_path, "nanodet_{}.json".format(self.cfg.check_point_name)),
+            with open(os.path.join(jit_path, f"nanodet_{self.cfg.check_point_name}.json"),
                       'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=4)
 
             model_traced.save(export_path_trace)
-            with open(os.path.join(jit_path, "trace", "nanodet_{}.json".format(self.cfg.check_point_name)),
+            with open(os.path.join(jit_path, "trace", f"nanodet_{self.cfg.check_point_name}.json"),
                       'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=4)
 
-            if verbose:
-                print("Finished export to TorchScript.")
+            self.info("Finished export to TorchScript.", verbose)
         return
 
     def _load_jit(self, jit_path, verbose=True):
         jit_path = jit_path[0]
-        if verbose:
-            print("Loading JIT model from {}.".format(jit_path))
-
+        self.info(f"Loading JIT model from {jit_path}.", verbose)
         self.jit_model = torch.jit.load(jit_path, map_location=self.device)
         return
 
     def _load_only_jit(self, jit_path, verbose=True):
         jit_path = jit_path[0]
-        if verbose:
-            print("Loading JIT model from {}.".format(jit_path))
-
+        self.info(f"Loading JIT model from {jit_path}.", verbose)
         self.jit_only_model = torch.jit.load(jit_path, map_location=self.device)
         return
 
@@ -667,7 +640,7 @@ class NanodetLearner(Learner):
                                 nms_max_num=nms_max_num, hf=hf, dynamic=dynamic)
             else:
                 assert NotImplementedError
-        with open(os.path.join(export_path, "nanodet_{}.json".format(self.cfg.check_point_name))) as f:
+        with open(os.path.join(export_path, f"nanodet_{self.cfg.check_point_name}.json")) as f:
             metadata = json.load(f)
         if optimization == "trt":
             self._load_trt([os.path.join(export_path, path) for path in metadata["model_paths"]], verbose)
@@ -716,12 +689,10 @@ class NanodetLearner(Learner):
             self.logger.dump_cfg(self.cfg)
 
         if seed != '' or seed is not None:
-            if self.logger:
-                self.logger.info("Set random seed to {}".format(seed))
+            self.info(f"Set random seed to {seed}", verbose)
             pl.seed_everything(seed)
 
-        if self.logger:
-            self.logger.info("Setting up data...")
+        self.info("Setting up data...", verbose)
 
         train_dataset = build_dataset(self.cfg.data.train, dataset, self.cfg.class_names, "train")
         val_dataset = train_dataset if val_dataset is None else \
@@ -767,12 +738,11 @@ class NanodetLearner(Learner):
 
         # Load state dictionary
         model_resume_path = (
-            os.path.join(self.temp_path, "checkpoints", "model_iter_{}.ckpt".format(self.checkpoint_load_iter))
+            os.path.join(self.temp_path, "checkpoints", f"model_iter_{self.checkpoint_load_iter}.ckpt")
             if self.checkpoint_load_iter > 0 else None
         )
 
-        if self.logger:
-            self.logger.info("Creating task...")
+        self.info("Creating task...", verbose)
 
         self.task = TrainingTask(self.cfg, self.model, evaluator, accumulate=accumulate)
 
@@ -813,7 +783,7 @@ class NanodetLearner(Learner):
         trainer.fit(self.task, train_dataloader, val_dataloader, ckpt_path=model_resume_path)
         return
 
-    def eval(self, dataset, verbose=True, logging=False, local_rank=1):
+    def eval(self, dataset, verbose=True, logging=False, mode=None, local_rank=1):
         """
         This method performs evaluation on a given dataset and returns a dictionary with the evaluation results.
         :param dataset: dataset object, to perform evaluation on
@@ -825,22 +795,24 @@ class NanodetLearner(Learner):
         :param local_rank: for distribution learning
         :type local_rank: int
         """
-
-        timestr = datetime.datetime.now().__format__("%Y_%m_%d_%H:%M:%S")
-        save_dir = os.path.join(self.cfg.save_dir, timestr)
+        mode = "val" if mode is None else mode
+        save_dir = os.path.join(self.cfg.save_dir, "evaluation", mode)
         mkdir(local_rank, save_dir)
 
-        if logging:
-            self.logger = NanoDetLightningLogger(save_dir)
+        if logging or verbose:
+            logger_fn = NanoDetLightningLogger
+            save_dir = f"{save_dir}" if logging else ""
+            self.logger = logger_fn(
+                save_dir=save_dir,
+                verbose_only=False if logging else True
+            )
 
-        self.cfg.update({"test_mode": "val"})
+        self.cfg.update({"test_mode": mode})
 
-        if logging:
-            self.logger.info("Setting up data...")
-        elif verbose:
-            print("Setting up data...")
+        self.info("Setting up data...", verbose)
 
-        val_dataset = build_dataset(self.cfg.data.val, dataset, self.cfg.class_names, "val")
+        val_dataset = build_dataset(self.cfg.data.val if mode == "val" else self.cfg.data.bench_test,
+                                    dataset, self.cfg.class_names, mode)
 
         if self.batch_size == -1:  # autobatch
             torch.backends.cudnn.benchmark = False
@@ -859,12 +831,9 @@ class NanodetLearner(Learner):
             collate_fn=naive_collate,
             drop_last=False,
         )
-        evaluator = build_evaluator(self.cfg.evaluator, val_dataset)
+        evaluator = build_evaluator(self.cfg.evaluator, val_dataset, logger=self.logger)
 
-        if logging:
-            self.logger.info("Creating task...")
-        elif verbose:
-            print("Creating task...")
+        self.info("Creating task...", verbose)
 
         self.task = TrainingTask(self.cfg, self.model, evaluator)
 
@@ -889,10 +858,8 @@ class NanodetLearner(Learner):
             logger=self.logger,
             precision=precision,
         )
-        if self.logger:
-            self.logger.info("Starting testing...")
-        elif verbose:
-            print("Starting testing...")
+        self.info(f"Starting testing... for mode {mode} with image size"
+                  f" {self.cfg.data.val.input_size if mode == 'val' else self.cfg.data.bench_test.input_size}", verbose)
 
         test_results = (verbose or logging)
         return trainer.test(self.task, val_dataloader, verbose=test_results)
@@ -928,12 +895,10 @@ class NanodetLearner(Learner):
             self.logger = NanoDetLightningLogger(save_dir="", verbose_only=verbose)
 
         if seed != '' or seed is not None:
-            if self.logger:
-                self.logger.info("Set random seed to {}".format(seed))
+            self.info(f"Set random seed to {seed}", verbose)
             pl.seed_everything(seed)
 
-        if self.logger:
-            self.logger.info("Setting up data...")
+        self.info("Setting up data...", verbose)
 
         train_dataset = build_dataset(self.cfg.data.train, dataset, self.cfg.class_names, "train")
         val_dataset = train_dataset if val_dataset is None else \
@@ -971,8 +936,7 @@ class NanodetLearner(Learner):
             drop_last=False,
         )
 
-        if self.logger:
-            self.logger.info("Creating task...")
+        self.info("Creating task...", verbose)
 
         self.task = TrainingTask(self.cfg, self.model, evaluator, accumulate=accumulate, qat=cfg.qat.get("enable", False))
 
@@ -1322,3 +1286,9 @@ class NanodetLearner(Learner):
             print(f"std ONNX infer: {std_onnx_infer_timings}")
 
         return
+
+    def info(self, msg, verbose=True):
+        if self.logger:
+            self.logger.info(msg)
+        elif verbose:
+            print(msg)

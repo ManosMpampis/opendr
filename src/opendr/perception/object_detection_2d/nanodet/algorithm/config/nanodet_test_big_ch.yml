@@ -1,14 +1,13 @@
 #Config File example
-save_dir: ./temp/test_big_ch_1k
-check_point_name: test_big_ch_1k
+save_dir: ./temp/test_big_ch_plus
+check_point_name: test_big_ch_plus
 model:
-#  weight_averager:
-#    name: ExpMovingAverager
-#    decay: 0.9998
+  weight_averager:
+    name: ExpMovingAverager
+    decay: 0.9998
   arch:
-    name: OneStageDetector
-    ch_l: False
-    fuse: False
+    name: NanoDetPlus
+    detach_epoch: 10
     backbone:
       name: SimpleCnn_3
       activation: LeakyReLU
@@ -31,7 +30,7 @@ model:
       name: SimplifierNanoDetPlusHead #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
       num_classes: 2
       input_channel: 32
-      feat_channels: 16
+      feat_channels: 32
       stacked_convs: 3
       kernel_size: 3 #Only in NanoDetPlusHead
       strides: [8, 16]
@@ -47,20 +46,20 @@ model:
           name: QualityFocalLoss
           use_sigmoid: True
           beta: 2.0
-          loss_weight: 1.5
+          loss_weight: 1.0
         loss_dfl:
           name: DistributionFocalLoss
           loss_weight: 0.25
         loss_bbox:
           name: GIoULoss
-          loss_weight: 1.5
+          loss_weight: 2.0
     # Auxiliary head, only use in training time.
     aux_head:
       name: SimpleConvHead
       num_classes: 2
-      input_channel: 32
-      feat_channels: 32
-      stacked_convs: 3
+      input_channel: 64
+      feat_channels: 64
+      stacked_convs: 4
       strides: [8, 16]
       activation: LeakyReLU
       reg_max: 7
@@ -68,7 +67,7 @@ data:
   train:
     input_size: [640, 640] #[w,h]
     keep_ratio: False
-    cache_images: disk
+    cache_images: _
     pipeline:
       perspective: 0.0
       scale: [0.9, 1.1]
@@ -87,7 +86,7 @@ data:
   val:
     input_size: [640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
-    cache_images: disk
+    cache_images: _
     pipeline:
       perspective: 0.0
       normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
@@ -119,11 +118,6 @@ schedule:
     T_max: 500
     eta_min: 0.00005
     last_epoch: -1
-#    name: CosineAnnealingWarmRestarts
-#    T_0: 10
-#    T_mult: 2
-#    eta_min: 0.00005
-#    last_epoch: -1
   val_intervals: 2
   effective_batchsize: 128
 evaluator:

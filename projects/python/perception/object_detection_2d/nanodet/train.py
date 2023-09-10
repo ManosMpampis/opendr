@@ -21,14 +21,14 @@ import os
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="test_big_ch") #"plus_m_1.5x_416")  # "test_big")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="simple_big_ch")
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
     parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=32)
     parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.005)
     parser.add_argument("--warmup-steps", help="iterations of warmup", type=int, default=2)
     parser.add_argument("--checkpoint-freq", help="Frequency in-between checkpoint saving and evaluations",
                         type=int, default=1)
-    parser.add_argument("--n-epochs", help="Number of total epochs", type=int, default=500)
+    parser.add_argument("--n-epochs", help="Number of total epochs", type=int, default=300)
     parser.add_argument("--resume-from", help="Epoch to load checkpoint file and resume training from",
                         type=int, default=0)
     parser.add_argument("--dataset_path", help="Path to dataset", type=str,

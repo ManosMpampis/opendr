@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/test_big_ch_premade_simpleGpan
-check_point_name: test_big_ch_premade_simpleGpan
+save_dir: ./temp/simple_big_ch
+check_point_name: simple_big_ch
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -26,27 +26,19 @@ model:
         mode: bilinear
       activation: LeakyReLU
       quant: False
-#      name: GhostPAN
-#      in_channels: [ 32, 64 ]
-#      out_channels: 32
-#      kernel_size: 5
-#      num_blocks: 1
-#      num_extra_level: 0
-#      use_depthwise: True
-#      upsample_cfg:
-#        scale_factor: 2
-#        mode: bilinear
-#      activation: LeakyReLU
     head:
-      name: NanoDetPlusHead
+      name: SimplifierNanoDetPlusHead #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
       num_classes: 2
       input_channel: 32
       feat_channels: 32
       stacked_convs: 3
-      kernel_size: 3
+      kernel_size: 3 #Only in NanoDetPlusHead
       strides: [ 8, 16 ]
-      activation: LeakyReLU
+      use_depthwise: True
       reg_max: 7
+      activation: LeakyReLU
+      quant: False
+      fork: False
       norm_cfg:
         type: BN
       loss:
@@ -92,22 +84,22 @@ data:
       saturation: [0.8, 1.1]
       normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
   val:
-    input_size: [640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
+    input_size: [640, 640] #[2456, 2054] #[640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
     cache_images: _
     pipeline:
       perspective: 0.0
       normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
   bench_test:
-    input_size: [1920, 1088] #[1920, 1088] [2456, 2054]
+    input_size: [2456, 2054] #[1920, 1088] [2456, 2054]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      normilize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
+      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
 device:
   gpu_ids: [0]
-  workers_per_gpu: 4
-  batchsize_per_gpu: 32
+  workers_per_gpu: 1
+  batchsize_per_gpu: 1
   precision: 32
 schedule:
   resume: 0

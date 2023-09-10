@@ -434,6 +434,8 @@ class SimplifierNanoDetPlusHead(nn.Module):
             pos_gt_bboxes = gt_bboxes[pos_assigned_gt_inds, :]
         return pos_inds, neg_inds, pos_gt_bboxes, pos_assigned_gt_inds
 
+    # def post_process(self, preds, meta: Dict[str, Tensor], mode: str = "infer", conf_thresh: float = 0.2,
+    #                  iou_thresh: float = 0.3, nms_max_num: int = 500):
     def post_process(self, preds, meta: Dict[str, Tensor], mode: str = "infer", conf_thresh: float = 0.05,
                      iou_thresh: float = 0.6, nms_max_num: int = 100):
         """Prediction results postprocessing. Decode bboxes and rescale
@@ -449,7 +451,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
         if mode == "eval" and not torch.jit.is_scripting():
             # Inference do not use batches and tries to have
             # tensors exclusively for better optimization during scripting.
-            return self._eval_post_process(preds, meta)
+            return self._eval_post_process(preds, meta, conf_thresh=conf_thresh, iou_thresh=iou_thresh, nms_max_num=nms_max_num)
 
         cls_scores, bbox_preds = preds.split(
             [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
@@ -477,11 +479,13 @@ class SimplifierNanoDetPlusHead(nn.Module):
 
         return det_result
 
-    def _eval_post_process(self, preds, meta):
+    def _eval_post_process(self, preds, meta, conf_thresh=0.05, iou_thresh=0.6, nms_max_num=100):
         cls_scores, bbox_preds = preds.split(
             [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
         )
-        result_list = self.get_bboxes(cls_scores, bbox_preds, meta["img"], mode="eval")
+        # result_list = self.get_bboxes(cls_scores, bbox_preds, meta["img"], mode="eval")
+        result_list = self.get_bboxes(cls_scores, bbox_preds, meta["img"], mode="eval", conf_threshold=conf_thresh,
+                                      iou_threshold=iou_thresh, nms_max_num=nms_max_num)
         det_results = {}
         warp_matrixes = (
             meta["warp_matrix"]

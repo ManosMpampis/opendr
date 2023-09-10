@@ -166,29 +166,30 @@ if __name__ == '__main__':
         "perspective": 0.0,
         "normalize": [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
     }
-    dataset_path = "/media/manos/hdd/Binary_Datasets/Football/"
-    dataset_metadata = {
-        "data_root": f"{dataset_path}/192x192_2pos_36neg",
-        "classes": ["player"],
-        "dataset_type": "BINARY_FOOTBALL",
-    }
-    data_root = dataset_metadata["data_root"]
-    dataset_type = dataset_metadata["dataset_type"]
-
-    classes = dataset_metadata["classes"]
-    images = f"{data_root}/test/images"
-    annotations = f"{data_root}/test/annotations"
+    # dataset_path = "/media/manos/hdd/Binary_Datasets/Football/"
+    # dataset_metadata = {
+    #     "data_root": f"{dataset_path}/192x192_2pos_36neg",
+    #     "classes": ["player"],
+    #     "dataset_type": "BINARY_FOOTBALL",
+    # }
+    # data_root = dataset_metadata["data_root"]
+    # dataset_type = dataset_metadata["dataset_type"]
     #
-    # classes = ["poaceae", "brassicaceae"]
-    # images = "/media/manos/hdd/allea_datasets/weedDataset/original_cropped/test/images"
-    # annotations = "/media/manos/hdd/allea_datasets/weedDataset/original_cropped/test/annotations"
+    # classes = dataset_metadata["classes"]
+    # images = f"{data_root}/test/images"
+    # annotations = f"{data_root}/test/annotations"
 
-    # dataset = XMLDataset(img_path=images, ann_path=annotations,
-    #                      class_names=classes, input_size=(608, 608), pipeline=pipeline, cache_images="ram")
-    dataset = XMLDataset(img_path=f'{data_root}/test/images', ann_path=f'{data_root}/test/annotations',
-                         class_names=classes, input_size=(192, 192), pipeline=pipeline)
+    classes = ["poaceae", "brassicaceae"]
+    images = "/media/manos/hdd/allea_datasets/weedDataset/test/images"
+    annotations = "/media/manos/hdd/allea_datasets/weedDataset/test/annotations"
+    #
+    dataset = XMLDataset(img_path=images, ann_path=annotations,
+                         class_names=classes, input_size=(608, 608), pipeline=pipeline)
+    # dataset = XMLDataset(img_path=f'{data_root}/test/images', ann_path=f'{data_root}/test/annotations',
+    #                      class_names=classes, input_size=(192, 192), pipeline=pipeline)
 
     for i, meta_data in enumerate(dataset):
+        print(f'{meta_data["img_info"]["file_name"]}.jpg')
         img = Image(meta_data["img"])
         targets = []
         for i in range(len(meta_data["gt_bboxes"])):
@@ -197,5 +198,6 @@ if __name__ == '__main__':
         targets = BoundingBoxList(targets)
         img = draw_bounding_boxes(img.opencv(), targets, class_names=dataset.class_names)
         cv2.imshow('img', img)
+        cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["img_info"]["file_name"]}.jpg', img)
         cv2.waitKey(0)
     cv2.destroyAllWindows()

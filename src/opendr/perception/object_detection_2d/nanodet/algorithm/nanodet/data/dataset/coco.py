@@ -134,6 +134,8 @@ class CocoDataset(BaseDataset):
         if fn is not None:
             img = np.load(image_path)
         else:
+            if image_path[-4:] != ".jpg":
+                image_path = image_path + ".jpg"
             img = cv2.imread(image_path)
         if img is None:
             print(f"image {image_path} read failed.")

@@ -117,7 +117,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         return len(self.data_info)
 
     def __getitem__(self, idx):
-        if self.mode == "val" or self.mode == "test":
+        if self.mode in ["val", "test"]:
             return self.get_val_data(idx)
         else:
             while True:
@@ -128,7 +128,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 return data
 
     def __call__(self, idx):
-        if self.mode == "val" or self.mode == "test":
+        if self.mode in ["val", "test"]:
             return self.get_val_data(idx)
         else:
             while True:
