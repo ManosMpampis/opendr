@@ -28,7 +28,7 @@ if __name__ == '__main__':
     parser.add_argument("--warmup-steps", help="iterations of warmup", type=int, default=2)
     parser.add_argument("--checkpoint-freq", help="Frequency in-between checkpoint saving and evaluations",
                         type=int, default=1)
-    parser.add_argument("--n-epochs", help="Number of total epochs", type=int, default=300)
+    parser.add_argument("--n-epochs", help="Number of total epochs", type=int, default=500)
     parser.add_argument("--resume-from", help="Epoch to load checkpoint file and resume training from",
                         type=int, default=0)
     parser.add_argument("--dataset_path", help="Path to dataset", type=str,

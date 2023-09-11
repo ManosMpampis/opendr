@@ -82,20 +82,26 @@ data:
       brightness: 0.2
       contrast: [0.8, 1.2]
       saturation: [0.8, 1.1]
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
+      # normalize: [[98.45, 104.11, 98.17], [34.8, 31.22, 29.66]] #all
+      normalize: [[101.23, 107.08, 102.44], [34.37, 30.67, 29.87]] #small_annot
+#      normalize:  #mean_annot
   val:
     input_size: [640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
     cache_images: _
     pipeline:
       perspective: 0.0
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
+      # normalize: [[98.45, 104.11, 98.17], [34.8, 31.22, 29.66]] #all
+      normalize: [[101.23, 107.08, 102.44], [34.37, 30.67, 29.87]] #small_annot
+#      normalize:  #mean_annot
   bench_test:
     input_size: [1920, 1088] #[1920, 1088] [2456, 2054]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      normilize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]
+      # normalize: [[98.45, 104.11, 98.17], [34.8, 31.22, 29.66]] #all
+      normalize: [[101.23, 107.08, 102.44], [34.37, 30.67, 29.87]] #small_annot
+#      normalize:  #mean_annot
 device:
   gpu_ids: [0]
   workers_per_gpu: 4
@@ -118,6 +124,11 @@ schedule:
     T_max: 500
     eta_min: 0.00005
     last_epoch: -1
+#    name: CosineAnnealingWarmRestarts
+#    T_0: 10
+#    T_mult: 2
+#    eta_min: 0.00005
+#    last_epoch: -1
   val_intervals: 2
   effective_batchsize: 128
 evaluator:

@@ -7,9 +7,25 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.modul
 model_urls = {
     "shufflenetv2_0.5x": "https://download.pytorch.org/models/shufflenetv2_x0.5-f707e7126e.pth",  # noqa: E501
     "shufflenetv2_1.0x": "https://download.pytorch.org/models/shufflenetv2_x1-5666bf0f80.pth",  # noqa: E501
-    "shufflenetv2_1.5x": None,
-    "shufflenetv2_2.0x": None,
+    "shufflenetv2_1.5x": "https://download.pytorch.org/models/shufflenetv2_x1_5-3c479a10.pth",  # noqa: E501
+    "shufflenetv2_2.0x": "https://download.pytorch.org/models/shufflenetv2_x2_0-8be3c8ee.pth",  # noqa: E501
 }
+
+
+def channel_shuffle(x, groups):
+    # type: (torch.Tensor, int) -> torch.Tensor
+    batchsize, num_channels, height, width = x.data.size()
+    channels_per_group = num_channels // groups
+
+    # reshape
+    x = x.view(batchsize, groups, channels_per_group, height, width)
+
+    x = torch.transpose(x, 1, 2).contiguous()
+
+    # flatten
+    x = x.view(batchsize, -1, height, width)
+
+    return x
 
 
 class ShuffleV2Block(nn.Module):
@@ -73,23 +89,6 @@ class ShuffleV2Block(nn.Module):
     def depthwise_conv(i, o, kernel_size, stride=1, padding=0, bias=False):
         return nn.Conv2d(i, o, kernel_size, stride, padding, bias=bias, groups=i)
 
-    @staticmethod
-    def channel_shuffle(x, groups):
-        # type: (torch.Tensor, torch.Tensor) -> torch.Tensor
-        # ch_l = x.is_contiguous(memory_format=torch.channels_last)
-        batchsize, num_channels, height, width = x.size()
-        channels_per_group = (num_channels / groups).to(torch.int32)
-
-        # reshape
-        x = x.view([batchsize, int(groups), int(channels_per_group), height, width])
-
-        x = torch.transpose(x, 1, 2).contiguous()
-
-        # flatten
-        x = x.view(batchsize, -1, height, width)
-        # x = x.to(memory_format=torch.channels_last) if ch_l else x
-        return x
-
     def forward(self, x):
         if self.stride == 1:
             x1, x2 = x.chunk(2, dim=1)
@@ -97,7 +96,7 @@ class ShuffleV2Block(nn.Module):
         else:
             out = torch.cat((self.branch1(x), self.branch2(x)), dim=1)
 
-        out = self.channel_shuffle(out, torch.tensor(2))
+        out = channel_shuffle(out, 2)
 
         return out
 
@@ -162,7 +161,6 @@ class ShuffleNetV2(nn.Module):
                         output_channels, output_channels, 1, activation=activation
                     )
                 )
-            # self.stage_list.append(*seq)
             setattr(self, name, nn.Sequential(*seq))
             input_channels = output_channels
         output_channels = self._stage_out_channels[-1]
@@ -172,7 +170,6 @@ class ShuffleNetV2(nn.Module):
                 nn.BatchNorm2d(output_channels),
                 act_layers(activation),
             )
-            self.stage_list.append(conv5)
             self.stage4.add_module("conv5", conv5)
         self._initialize_weights(pretrain)
 
@@ -181,19 +178,12 @@ class ShuffleNetV2(nn.Module):
         x = self.conv1(x)
         x = self.maxpool(x)
         output = []
-        x = self.stage2(x)
-        output.append(x)
-        x = self.stage3(x)
-        output.append(x)
-        x = self.stage4(x)
-        output.append(x)
-        # for i in range(2, 5):
-        #     stage = self.stage_list(i)
-        #     stage = getattr(self, "stage{}".format(i))
-        #     x = stage(x)
-        #     if i in self.out_stages:
-        #         output.append(x)
-        return output
+        for i in range(2, 5):
+            stage = getattr(self, "stage{}".format(i))
+            x = stage(x)
+            if i in self.out_stages:
+                output.append(x)
+        return tuple(output)
 
     def _initialize_weights(self, pretrain=True):
         print("init weights...")

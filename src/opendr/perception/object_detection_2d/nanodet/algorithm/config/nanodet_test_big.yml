@@ -6,7 +6,8 @@ model:
 #    name: ExpMovingAverager
 #    decay: 0.9998
   arch:
-    name: OneStageDetector
+    name: NanoDetPlus
+    detach_epoch: 10
     ch_l: False
     fuse: False
     backbone:
@@ -34,7 +35,7 @@ model:
       feat_channels: 8
       stacked_convs: 1 #Its pass in head have so many conv in list
       kernel_size: 3 #Only in NanoDetPlusHead
-      strides: [4, 8, 16] #[4, 8] #[2, 4] #Set of last pass of all layers in head from the corresponding layer
+      strides: [4, 8, 16] #[4, 8] #Set of last pass of all layers in head from the corresponding layer
       use_depthwise: True
 #      octave_base_scale: 1 #Only in NanoDetHead
       reg_max: 7

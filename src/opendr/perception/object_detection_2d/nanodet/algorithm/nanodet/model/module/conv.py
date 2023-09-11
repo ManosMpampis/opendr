@@ -68,34 +68,9 @@ def fuse_modules(m):
             fuse_modules(m_in_list)
 
 
-class ConvPool(nn.Module):
-    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
-    default_act = nn.SiLU()  # default activation
-    default_pool = nn.MaxPool2d(kernel_size=2, stride=1, padding=1)
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True, s_p=1):
-        super().__init__()
-        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
-        self.bn = nn.BatchNorm2d(c2)
-        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
-        if pool is True:
-            self.default_pool.stride = s_p
-            self.pool = self.default_pool.stride
-        elif isinstance(pool, nn.Module):
-            self.pool = pool
-        else:
-            self.pool = nn.Identity()
-
-    def forward(self, x):
-        return self.act(self.pool(self.bn(self.conv(x))))
-
-    def forward_fuse(self, x):
-        return self.act(self.pool(self.conv(x)))
-
-
 class DWConvQuant(nn.Module):
     # Depth-wise convolution
-    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None):
+    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
         super().__init__()
         self.depthwise = ConvQuant(c1, c1, k, s=s, p=p, d=d, g=c1, act=act)
         self.pointwise = ConvQuant(c1, c2, k=1, s=1, p=0, act=act)
@@ -103,11 +78,12 @@ class DWConvQuant(nn.Module):
     def forward(self, x):
         return self.pointwise(self.depthwise(x))
 
+
 class Conv(nn.Module):
     # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
     default_act = nn.SiLU()  # default activation
 
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
@@ -132,10 +108,47 @@ class Conv(nn.Module):
                 m.bn.bias.data.zero_()
 
 
+class ConvPool(Conv):
+    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
+    default_act = nn.SiLU()  # default activation
+    default_pool = nn.MaxPool2d(kernel_size=2, stride=1, padding=1)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
+        super(ConvPool, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act, pool=pool)
+        self.pool = self.default_pool if pool is True else pool if isinstance(pool, nn.Module) else nn.Identity()
+
+    def forward(self, x):
+        return self.act(self.pool(self.bn(self.conv(x))))
+
+    def forward_fuse(self, x):
+        return self.act(self.pool(self.conv(x)))
+
+
+class ConvPoolQuant(ConvPool):
+    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
+        super(ConvPoolQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = super().forward(x)
+        x = self.dequant(x)
+        return x
+
+    def forward_fuse(self, x):
+        x = self.quant(x)
+        x = super().forward_fuse(x)
+        x = self.dequant(x)
+        return x
+
+
 class ConvQuant(Conv):
     # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
 
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
         super(ConvQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
         self.quant = torch.quantization.QuantStub()
         self.dequant = torch.quantization.DeQuantStub()
@@ -175,7 +188,7 @@ class ConvQuant(Conv):
 
 
 class DWConv(nn.Module):
-    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None):
+    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
         super().__init__()
         self.depthwise = Conv(c1, c1, k, s=s, p=p, d=d, g=c1, act=act)
         self.pointwise = Conv(c1, c2, k=1, s=1, p=0, act=act)

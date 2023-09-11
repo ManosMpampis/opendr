@@ -180,8 +180,8 @@ if __name__ == '__main__':
     # annotations = f"{data_root}/test/annotations"
 
     classes = ["poaceae", "brassicaceae"]
-    images = "/media/manos/hdd/allea_datasets/weedDataset/test/images"
-    annotations = "/media/manos/hdd/allea_datasets/weedDataset/test/annotations"
+    images = "/home/manos/data/weedDataset/original_dataset/test/images"
+    annotations = "/home/manos/data/weedDataset/small_annots/big_annot/test/annotations"
     #
     dataset = XMLDataset(img_path=images, ann_path=annotations,
                          class_names=classes, input_size=(608, 608), pipeline=pipeline)
@@ -195,9 +195,16 @@ if __name__ == '__main__':
         for i in range(len(meta_data["gt_bboxes"])):
             targets.append(BoundingBox(name=meta_data["gt_labels"][i], left=meta_data["gt_bboxes"][i][0], top=meta_data["gt_bboxes"][i][1],
                                        width=meta_data["gt_bboxes"][i][2]-meta_data["gt_bboxes"][i][0], height=meta_data["gt_bboxes"][i][3]-meta_data["gt_bboxes"][i][1], score=1))
-        targets = BoundingBoxList(targets)
-        img = draw_bounding_boxes(img.opencv(), targets, class_names=dataset.class_names)
-        cv2.imshow('img', img)
-        cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["img_info"]["file_name"]}.jpg', img)
-        cv2.waitKey(0)
+        if len(targets) > 1:
+            print("found")
+            targets = BoundingBoxList(targets)
+            img = draw_bounding_boxes(img.opencv(), targets, class_names=dataset.class_names)
+            cv2.imshow('img', img)
+            # cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["img_info"]["file_name"]}.jpg', img)
+            cv2.waitKey(0)
+
+        # img = draw_bounding_boxes(img.opencv(), targets, class_names=dataset.class_names)
+        # cv2.imshow('img', img)
+        # cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["img_info"]["file_name"]}.jpg', img)
+        # cv2.waitKey(0)
     cv2.destroyAllWindows()
