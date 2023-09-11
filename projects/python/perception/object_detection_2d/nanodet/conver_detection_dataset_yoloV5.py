@@ -129,7 +129,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    dataset_main_path = "/media/manos/hdd/allea_datasets/weedDataset"
+    dataset_main_path = "/home/manos/data/weedDataset"
     parser = argparse.ArgumentParser()
     parser.add_argument("--original-data-path", help="Dataset root", type=str, default=f"{dataset_main_path}/cropped_mean_annot")
     parser.add_argument("--new-data-path", help="Path to converted dataset location", type=str, default=f"{dataset_main_path}/cropped_mean_annot")
