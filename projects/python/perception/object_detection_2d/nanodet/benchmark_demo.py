@@ -19,7 +19,7 @@ from opendr.engine.data import Image
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="test_big_ch_premade")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="simple_big_ch")
     parser.add_argument("--optimize-jit", help="", action="store_false")
     parser.add_argument("--optimize-trt", help="", action="store_false")
     parser.add_argument("--download", help="", action="store_true")
@@ -34,6 +34,20 @@ if __name__ == '__main__':
     parser.add_argument("--nms", help="Determines the max amount of bboxes the nms will output", type=int, default=30)
     args = parser.parse_args()
 
+    dataset_metadata = {
+        "data_root": "/media/manos/hdd/allea_datasets/weedDataset",
+        "classes": ["poaceae", "brassicaceae"],
+        "dataset_type": "weed",
+    }
+    data_root = dataset_metadata["data_root"]
+    classes = dataset_metadata["classes"]
+    dataset_type = dataset_metadata["dataset_type"]
+    from opendr.perception.object_detection_2d.datasets import XMLBasedDataset
+    dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
+                              annotations_dir='annotations', classes=classes)
+
+
+
     nanodet = NanodetLearner(model_to_use=args.model, device=args.device, model_log_name=f"{args.model}")
 
     if args.download:
@@ -44,7 +58,7 @@ if __name__ == '__main__':
     if args.optimize_jit:
         nanodet.optimize(f"./jit/nanodet_{nanodet.cfg.check_point_name}", optimization="jit", hf=args.hf, verbose=False, new_load=False)
     if args.optimize_trt:
-        nanodet.optimize(f"./trt/nanodet_{nanodet.cfg.check_point_name}", optimization="trt", hf=args.hf, verbose=False, new_load=False, dynamic=args.dynamic)
+        nanodet.optimize(f"./trt/nanodet_{nanodet.cfg.check_point_name}", optimization="trt", hf=args.hf, verbose=False, new_load=False, dynamic=args.dynamic, calib_dataset=dataset)
 
     nanodet.benchmark(repetitions=args.repetitions, warmup=args.warmup, conf_threshold=args.conf_threshold,
                       iou_threshold=args.iou_threshold, nms_max_num=args.nms, hf=args.hf, fuse=args.fuse, ch_l=args.ch_l)

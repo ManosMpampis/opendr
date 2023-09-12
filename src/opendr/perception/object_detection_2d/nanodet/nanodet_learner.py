@@ -415,23 +415,19 @@ class NanodetLearner(Learner):
         width, height = self.cfg.data.bench_test.input_size
         return torch.empty((width, height, 3), device="cpu", dtype=torch.half if hf else torch.float32).numpy()
 
-    def _save_onnx(self, onnx_path, do_constant_folding=False, verbose=True, conf_thresh=0.35,
-                   iou_thresh=0.6, nms_max_num=100, hf=False, dynamic=True):
-        if not self.predictor:
-            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
-                                       iou_thresh=iou_thresh, nms_max_num=nms_max_num, hf=hf)
+    def _save_onnx(self, onnx_path, predictor, do_constant_folding=False, verbose=True, dynamic=True):
 
         os.makedirs(onnx_path, exist_ok=True)
         export_path = os.path.join(onnx_path, f"nanodet_{self.cfg.check_point_name}.onnx")
 
-        dummy_input = self.__dummy_input(hf=hf)
+        dummy_input = self.__dummy_input(hf=predictor.hf)
 
         if dynamic:
-            assert not hf, '--hf not compatible with --dynamic, i.e. use either --hf or --dynamic but not both'
+            assert not predictor.hf, '--hf not compatible with --dynamic, i.e. use either --hf or --dynamic but not both'
             dynamic = {"data": {2: 'width', 3: 'height'}, "output": {1: "feature_points"}}
 
         torch.onnx.export(
-            self.predictor,
+            predictor,
             dummy_input[0],
             export_path,
             verbose=verbose,
@@ -446,7 +442,7 @@ class NanodetLearner(Learner):
         metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.onnx"], "framework": "pytorch",
                     "format": "onnx", "has_data": False, "optimized": True, "optimizer_info": {},
                     "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
-                                         "conf_threshold": conf_thresh, "iou_threshold": iou_thresh}}
+                                         "conf_threshold": predictor.conf_threshold, "iou_threshold": predictor.iou_threshold}}
 
         with open(os.path.join(onnx_path, f"nanodet_{self.cfg.check_point_name}.json"), 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
@@ -475,18 +471,19 @@ class NanodetLearner(Learner):
         self.ort_session = ort.InferenceSession(onnx_path)
         return
 
-    def _save_trt(self, trt_path, verbose=True, conf_thresh=0.35,
-                   iou_thresh=0.6, nms_max_num=100, hf=False, dynamic=True):
+    def _save_trt(self, trt_path, predictor, verbose=True, dynamic=True, calib_dataset=None,
+                  calib_cache="./calibration.cache", calib_num_images=25000, calib_batch_size=8):
 
         os.makedirs(trt_path, exist_ok=True)
 
         export_path_onnx = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.onnx")
         export_path_trt = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.trt")
+        calib_cache = os.path.join(trt_path, calib_cache)
         export_path_json = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.json")
 
         from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.utilities import Postprocessor
-        postprocessor = Postprocessor(self.cfg, self.model, device=self.device, conf_thresh=conf_thresh,
-                                      iou_thresh=iou_thresh, nms_max_num=nms_max_num, hf=hf)
+        postprocessor = Postprocessor(self.cfg, self.model, device=self.device, conf_thresh=predictor.conf_threshold,
+                                      iou_thresh=predictor.iou_threshold, nms_max_num=predictor.nms_max_num, hf=predictor.hf)
         with torch.no_grad():
             export_path_pth = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.pth")
             post_process_scripted = torch.jit.script(postprocessor)
@@ -497,10 +494,9 @@ class NanodetLearner(Learner):
             assert torch.__version__[2:4] == "13",\
                 f"tensorRT onnx parser is not compatible with resize implementations of pytorch before version 1.13.0." \
                 f" Please update your pytorch and try again, or provide a onnx file into {export_path_onnx}"
-            self._save_onnx(trt_path, verbose=verbose, conf_thresh=conf_thresh, iou_thresh=iou_thresh,
-                            nms_max_num=nms_max_num, hf=hf, dynamic=dynamic)
+            self._save_onnx(trt_path, predictor, verbose=verbose, dynamic=dynamic)
 
-        trt_logger_level = trt.Logger.WARNING if verbose else trt.Logger.ERROR
+        trt_logger_level = trt.Logger.INFO if verbose else trt.Logger.ERROR
         TRT_LOGGER = trt.Logger(trt_logger_level)
 
         builder = trt.Builder(TRT_LOGGER)
@@ -522,18 +518,40 @@ class NanodetLearner(Learner):
         for out in outputs:
             self.info(f'TensorRT: output "{out.name}" with shape{out.shape} {out.dtype}', verbose)
 
-        im = self.__dummy_input(hf=hf)[0]
+        im = self.__dummy_input(hf=predictor.hf)[0]
         if dynamic:
-            assert not hf, '--hf not compatible with --dynamic, i.e. use either --hf or --dynamic but not both'
+            assert not predictor.hf, '--hf not compatible with --dynamic, i.e. use either --hf or --dynamic but not both'
             profile = builder.create_optimization_profile()
             for inp in inputs:
                 profile.set_shape(inp.name, (1, im.shape[1], 10, 10), im.shape, im.shape)
             config.add_optimization_profile(profile)
 
-        if hf:
+        if predictor.hf:
             if not builder.platform_has_fast_fp16:
                 self.info("Platform do not have fast fp16", True)
             config.set_flag(trt.BuilderFlag.FP16)
+            if not builder.platform_has_fast_int8:
+                self.info("Platform do not have fast int8", True)
+            config.set_flag(trt.BuilderFlag.INT8)
+            from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.int8 import EngineCalibrator, ImageBatcher
+            config.int8_calibrator = EngineCalibrator(calib_cache, TRT_LOGGER)
+            calib_dataset = build_dataset(self.cfg.data.bench_test, calib_dataset, self.cfg.class_names, "test")
+            if not os.path.exists(calib_cache):
+                calib_shape = [calib_batch_size] + list(inputs[0].shape[1:])
+                calib_dtype = trt.nptype(inputs[0].dtype)
+                config.int8_calibrator.set_image_batcher(
+                    ImageBatcher(
+                        calib_dataset,
+                        calib_shape,
+                        calib_dtype,
+                        max_num_images=calib_num_images,
+                        preprocessor=predictor.preprocessing,
+                    )
+                )
+
+
+
+
 
         engine = builder.build_engine(network, config)
         with open(export_path_trt, 'wb') as f:
@@ -543,7 +561,7 @@ class NanodetLearner(Learner):
                     "format": "tensorRT", "has_data": False, "optimized": True, "optimizer_info": {},
                     "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
                                          "num_classes": len(self.classes), "reg_max": self.cfg.model.arch.head.reg_max,
-                                         "strides": self.cfg.model.arch.head.strides}, "hf": hf}
+                                         "strides": self.cfg.model.arch.head.strides}, "hf": predictor.hf}
 
         with open(export_path_json, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
@@ -556,31 +574,27 @@ class NanodetLearner(Learner):
         with open(f'{trt_paths[0]}', 'rb') as f, trt.Runtime(TRT_LOGGER) as runtime:
             engine = runtime.deserialize_cuda_engine(f.read())
 
-        self.trt_model = trt_dep.trt_model(engine, self.cfg, self.device)
+        self.trt_model = trt_dep.trt_model(engine, self.device)
 
         self.jit_postprocessing = torch.jit.load(trt_paths[1], map_location=self.device)
         return
 
-    def _save_jit(self, jit_path, verbose=True, conf_threshold=0.35, iou_threshold=0.6,
-                  nms_max_num=100, hf=False):
-        if not self.predictor:
-            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, hf=hf)
+    def _save_jit(self, jit_path, predictor, verbose=True):
 
         os.makedirs(jit_path, exist_ok=True)
         os.makedirs(f"{jit_path}/trace", exist_ok=True)
-        dummy_input = self.__dummy_input(hf=hf)
+        dummy_input = self.__dummy_input(hf=predictor.hf)
         with torch.no_grad():
             export_path = os.path.join(jit_path, f"nanodet_{self.cfg.check_point_name}.pth")
-            self.predictor.trace_model(dummy_input)
-            model_scripted = torch.jit.script(self.predictor)
+            predictor.trace_model(dummy_input)
+            model_scripted = torch.jit.script(predictor)
             export_path_trace = os.path.join(jit_path, "trace", f"nanodet_{self.cfg.check_point_name}.pth")
-            model_traced = self.predictor.traced_model
+            model_traced = predictor.traced_model
 
             metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.pth"], "framework": "pytorch",
                         "format": "pth", "has_data": False, "optimized": True, "optimizer_info": {},
                         "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
-                                             "conf_threshold": conf_threshold, "iou_threshold": iou_threshold}}
+                                             "conf_threshold": predictor.conf_thresholdold, "iou_threshold": predictor.iou_thresholdold}}
             model_scripted.save(export_path)
 
             with open(os.path.join(jit_path, f"nanodet_{self.cfg.check_point_name}.json"),
@@ -608,7 +622,8 @@ class NanodetLearner(Learner):
         return
 
     def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6,
-                 nms_max_num=100, hf=False, new_load=True, dynamic=False):
+                 nms_max_num=100, hf=False, new_load=True, dynamic=False, calib_dataset=None,
+                  calib_cache="./calibration.cache", calib_num_images=25000, calib_batch_size=1):
         """
         Method for optimizing the model with ONNX or JIT.
         :param export_path: The file path to the folder where the optimized model will be saved. If a model already
@@ -629,15 +644,15 @@ class NanodetLearner(Learner):
         optimization = optimization.lower()
 
         if not os.path.exists(export_path) or new_load:
+            predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
+                                  iou_thresh=iou_threshold, nms_max_num=nms_max_num, hf=hf)
             if optimization == "trt":
-                self._save_trt(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                               nms_max_num=nms_max_num, hf=hf, dynamic=dynamic)
+                self._save_trt(export_path, verbose=verbose, predictor=predictor, dynamic=dynamic, calib_dataset=calib_dataset,
+                  calib_cache=calib_cache, calib_num_images=calib_num_images, calib_batch_size=calib_batch_size)
             elif optimization == "jit":
-                self._save_jit(export_path, verbose=verbose, conf_threshold=conf_threshold, iou_threshold=iou_threshold,
-                               nms_max_num=nms_max_num, hf=hf)
+                self._save_jit(export_path, verbose=verbose, predictor=predictor)
             elif optimization == "onnx":
-                self._save_onnx(export_path, verbose=verbose, conf_thresh=conf_threshold, iou_thresh=iou_threshold,
-                                nms_max_num=nms_max_num, hf=hf, dynamic=dynamic)
+                self._save_onnx(export_path, verbose=verbose, predictor=predictor, dynamic=dynamic)
             else:
                 assert NotImplementedError
         with open(os.path.join(export_path, f"nanodet_{self.cfg.check_point_name}.json")) as f:
@@ -971,7 +986,7 @@ class NanodetLearner(Learner):
         trainer.fit(self.task, train_dataloader, val_dataloader, ckpt_path=None)
         return
 
-    def infer(self, input, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, hf=False):
+    def infer(self, input, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, hf=False, bench=False):
         """
         Performs inference
         :param input: input image to perform inference on
@@ -993,7 +1008,7 @@ class NanodetLearner(Learner):
             input = Image(input)
         _input = input.opencv()
 
-        _input, *metadata = self.predictor.preprocessing(_input)
+        _input, *metadata = self.predictor.preprocessing(_input, bench=bench)
 
         if self.ort_session:
             if self.jit_model or self.trt_model:
@@ -1048,7 +1063,7 @@ class NanodetLearner(Learner):
         import numpy as np
 
         dummy_input = self.__cv_dumy_input()
-
+        self.model.float()
         self.cfg.defrost()
         self.cfg.model.arch.ch_l = ch_l
         self.cfg.model.arch.fuse = fuse
@@ -1288,7 +1303,7 @@ class NanodetLearner(Learner):
         return
 
     def info(self, msg, verbose=True):
-        if self.logger:
+        if self.logger and verbose:
             self.logger.info(msg)
         elif verbose:
             print(msg)

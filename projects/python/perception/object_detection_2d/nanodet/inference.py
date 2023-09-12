@@ -50,12 +50,12 @@ if __name__ == '__main__':
     dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
     if args.optimize != "":
-        nanodet.optimize(f"./{args.optimize}/nanodet_{args.model}", optimization=args.optimize, hf=False, new_load=False)
+        nanodet.optimize(f"./{args.optimize}/nanodet_{nanodet.cfg.check_point_name}", optimization=args.optimize, hf=True, new_load=False, calib_dataset=dataset)
 
     printed_classes = nanodet.classes + [f"GR: {cls}" for cls in nanodet.classes]
     for idx, (img, annotation) in enumerate(dataset):
         boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
-                              nms_max_num=args.nms, hf=False)
+                              nms_max_num=args.nms, hf=True, bench=True)
         # for box in annotation.boxes:
         #     box.name = box.name + len(printed_classes)//2
         #     boxes.add_box(box)

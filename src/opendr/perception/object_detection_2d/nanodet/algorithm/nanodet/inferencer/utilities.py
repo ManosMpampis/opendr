@@ -27,8 +27,8 @@ class Predictor(nn.Module):
         super(Predictor, self).__init__()
         self.cfg = cfg
         self.device = device
-        self.conf_thresh = conf_thresh
-        self.iou_thresh = iou_thresh
+        self.conf_threshold = conf_thresh
+        self.iou_threshold = iou_thresh
         self.nms_max_num = nms_max_num
         self.hf = hf
         self.fuse = self.cfg.model.arch.fuse
@@ -72,7 +72,7 @@ class Predictor(nn.Module):
         # cv2 is needed, and it is installed with abi cxx11 but torch is in cxx<11
         return self.model.inference(img)
 
-    def preprocessing(self, img, bench=False, not_trt=True):
+    def preprocessing(self, img, bench=False):
         if bench:
             try:
                 input_size = self.cfg.data.bench_test.input_size
@@ -92,6 +92,7 @@ class Predictor(nn.Module):
         meta["img"] = meta["img"].half() if self.hf else meta["img"]
         meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
 
+        # meta["img"] = meta["img"].to(torch.uint8)
         _input = meta["img"]
         _input = _input.to(memory_format=torch.channels_last) if self.ch_l else _input
         _height = torch.as_tensor(height)
@@ -102,7 +103,7 @@ class Predictor(nn.Module):
 
     def postprocessing(self, preds, input, height, width, warp_matrix):
         meta = {"height": height, "width": width, 'img': input, 'warp_matrix': warp_matrix}
-        res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
+        res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_threshold, iou_thresh=self.iou_threshold,
                                            nms_max_num=self.nms_max_num)
         return res
 
@@ -112,8 +113,8 @@ class Postprocessor(nn.Module):
         super(Postprocessor, self).__init__()
         self.cfg = cfg
         self.device = device
-        self.conf_thresh = conf_thresh
-        self.iou_thresh = iou_thresh
+        self.conf_threshold = conf_thresh
+        self.iou_threshold = iou_thresh
         self.nms_max_num = nms_max_num
         self.hf = hf
 
@@ -123,6 +124,6 @@ class Postprocessor(nn.Module):
         meta = {"height": height, "width": width, 'img': input.half() if self.hf else input, 'warp_matrix': warp_matrix}
         if self.hf:
             preds = preds.half()
-        res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
+        res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_threshold, iou_thresh=self.iou_threshold,
                                            nms_max_num=self.nms_max_num)
         return res
