@@ -15,9 +15,15 @@
 # limitations under the License.
 #
 
-import tensorrt as trt
+
 import pycuda.driver as cuda
-import pycuda.autoinit
+try:
+    import pycuda.autoprimaryctx
+except ModuleNotFoundError:
+    import pycuda.autoinit
+
+import tensorrt as trt
+
 
 import os
 import sys
@@ -154,11 +160,11 @@ class EngineCalibrator(trt.IInt8MinMaxCalibrator):
             return None
         try:
             batch, _ = next(self.batch_generator)
-            self.logger.log(trt.Logger.WARNING, "Calibrating image {} / {}".format(self.image_batcher.image_index, self.image_batcher.num_images))
+            self.logger.log(trt.Logger.INFO, "Calibrating image {} / {}".format(self.image_batcher.image_index, self.image_batcher.num_images))
             cuda.memcpy_htod(self.batch_allocation, np.ascontiguousarray(batch))
             return [int(self.batch_allocation)]
         except StopIteration:
-            self.logger.log(trt.Logger.WARNING, "Finished calibration batches")
+            self.logger.log(trt.Logger.INFO, "Finished calibration batches")
             return None
 
     def read_calibration_cache(self):
@@ -169,7 +175,7 @@ class EngineCalibrator(trt.IInt8MinMaxCalibrator):
         """
         if os.path.exists(self.cache_file):
             with open(self.cache_file, "rb") as f:
-                self.logger.log(trt.Logger.WARNING, "Using calibration cache file: {}".format(self.cache_file))
+                self.logger.log(trt.Logger.INFO, "Using calibration cache file: {}".format(self.cache_file))
                 return f.read()
 
     def write_calibration_cache(self, cache):
@@ -179,5 +185,5 @@ class EngineCalibrator(trt.IInt8MinMaxCalibrator):
         :param cache: The contents of the calibration cache to store.
         """
         with open(self.cache_file, "wb") as f:
-            self.logger.log(trt.Logger.WARNING, "Writing calibration cache data to: {}".format(self.cache_file))
+            self.logger.log(trt.Logger.INFO, "Writing calibration cache data to: {}".format(self.cache_file))
             f.write(cache)

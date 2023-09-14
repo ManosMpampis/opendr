@@ -13,7 +13,6 @@
 # limitations under the License.
 import math
 import os
-import datetime
 import json
 import warnings
 from pathlib import Path
@@ -27,6 +26,10 @@ except ImportError:
     from pytorch_lightning.callbacks import ProgressBar as TQDMProgressBar
 
 try:
+    try:
+        import pycuda.autoprimaryctx
+    except ModuleNotFoundError:
+        import pycuda.autoinit
     import tensorrt as trt
     from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer import trt_dep
 except ImportError as e:
@@ -472,14 +475,14 @@ class NanodetLearner(Learner):
         return
 
     def _save_trt(self, trt_path, predictor, verbose=True, dynamic=True, calib_dataset=None,
-                  calib_cache="./calibration.cache", calib_num_images=25000, calib_batch_size=8):
+                  calib_cache="./calibration.cache", calib_num_images=25000, calib_batch_size=8, int=False):
 
         os.makedirs(trt_path, exist_ok=True)
 
         export_path_onnx = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.onnx")
-        export_path_trt = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.trt")
+        export_path_trt = os.path.join(trt_path, f"nanodet_{f'int8_{self.cfg.check_point_name}' if int else self.cfg.check_point_name}.trt")
         calib_cache = os.path.join(trt_path, calib_cache)
-        export_path_json = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.json")
+        export_path_json = os.path.join(trt_path, f"nanodet_{f'int8_{self.cfg.check_point_name}' if int else self.cfg.check_point_name}.json")
 
         from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.utilities import Postprocessor
         postprocessor = Postprocessor(self.cfg, self.model, device=self.device, conf_thresh=predictor.conf_threshold,
@@ -526,17 +529,19 @@ class NanodetLearner(Learner):
                 profile.set_shape(inp.name, (1, im.shape[1], 10, 10), im.shape, im.shape)
             config.add_optimization_profile(profile)
 
-        if predictor.hf:
+        if predictor.hf or int:
             if not builder.platform_has_fast_fp16:
                 self.info("Platform do not have fast fp16", True)
             config.set_flag(trt.BuilderFlag.FP16)
+        if int:
+            from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.int8 import \
+                EngineCalibrator, ImageBatcher
             if not builder.platform_has_fast_int8:
                 self.info("Platform do not have fast int8", True)
             config.set_flag(trt.BuilderFlag.INT8)
-            from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.int8 import EngineCalibrator, ImageBatcher
             config.int8_calibrator = EngineCalibrator(calib_cache, TRT_LOGGER)
-            calib_dataset = build_dataset(self.cfg.data.bench_test, calib_dataset, self.cfg.class_names, "test")
             if not os.path.exists(calib_cache):
+                calib_dataset = build_dataset(self.cfg.data.bench_test, calib_dataset, self.cfg.class_names, "test")
                 calib_shape = [calib_batch_size] + list(inputs[0].shape[1:])
                 calib_dtype = trt.nptype(inputs[0].dtype)
                 config.int8_calibrator.set_image_batcher(
@@ -549,19 +554,19 @@ class NanodetLearner(Learner):
                     )
                 )
 
-
-
-
-
         engine = builder.build_engine(network, config)
         with open(export_path_trt, 'wb') as f:
             f.write(engine.serialize())
 
-        metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.trt", f"nanodet_{self.cfg.check_point_name}.pth"], "framework": "pytorch",
-                    "format": "tensorRT", "has_data": False, "optimized": True, "optimizer_info": {},
-                    "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
-                                         "num_classes": len(self.classes), "reg_max": self.cfg.model.arch.head.reg_max,
-                                         "strides": self.cfg.model.arch.head.strides}, "hf": predictor.hf}
+        metadata = {
+            "model_paths": [
+                f"nanodet_{f'int8_{self.cfg.check_point_name}' if int else self.cfg.check_point_name}.trt",
+                f"nanodet_{self.cfg.check_point_name}.pth"
+            ],
+            "framework": "pytorch", "format": "tensorRT", "has_data": False, "optimized": True, "optimizer_info": {},
+            "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
+                                 "num_classes": len(self.classes), "reg_max": self.cfg.model.arch.head.reg_max,
+                                 "strides": self.cfg.model.arch.head.strides}, "hf": predictor.hf}
 
         with open(export_path_json, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
@@ -623,7 +628,7 @@ class NanodetLearner(Learner):
 
     def optimize(self, export_path, verbose=True, optimization="jit", conf_threshold=0.35, iou_threshold=0.6,
                  nms_max_num=100, hf=False, new_load=True, dynamic=False, calib_dataset=None,
-                  calib_cache="./calibration.cache", calib_num_images=25000, calib_batch_size=1):
+                  calib_cache="./calibration.cache", calib_num_images=25000, calib_batch_size=1, int=False):
         """
         Method for optimizing the model with ONNX or JIT.
         :param export_path: The file path to the folder where the optimized model will be saved. If a model already
@@ -640,15 +645,16 @@ class NanodetLearner(Learner):
         :param nms_max_num: determines the maximum number of bounding boxes that will be retained following the nms.
         :type nms_max_num: int
         """
+        if int:
+            assert hf, "if INT8 is enabled hf must be enabled as well!!!"
 
         optimization = optimization.lower()
-
         if not os.path.exists(export_path) or new_load:
             predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
                                   iou_thresh=iou_threshold, nms_max_num=nms_max_num, hf=hf)
             if optimization == "trt":
                 self._save_trt(export_path, verbose=verbose, predictor=predictor, dynamic=dynamic, calib_dataset=calib_dataset,
-                  calib_cache=calib_cache, calib_num_images=calib_num_images, calib_batch_size=calib_batch_size)
+                               calib_cache=calib_cache, calib_num_images=calib_num_images, calib_batch_size=calib_batch_size, int=int)
             elif optimization == "jit":
                 self._save_jit(export_path, verbose=verbose, predictor=predictor)
             elif optimization == "onnx":
@@ -658,6 +664,9 @@ class NanodetLearner(Learner):
         with open(os.path.join(export_path, f"nanodet_{self.cfg.check_point_name}.json")) as f:
             metadata = json.load(f)
         if optimization == "trt":
+            if int:
+                with open(os.path.join(export_path, f"nanodet_int8_{self.cfg.check_point_name}.json")) as f:
+                    metadata = json.load(f)
             self._load_trt([os.path.join(export_path, path) for path in metadata["model_paths"]], verbose)
         elif optimization == "jit":
             self._load_jit([os.path.join(export_path, path) for path in metadata["model_paths"]], verbose)
