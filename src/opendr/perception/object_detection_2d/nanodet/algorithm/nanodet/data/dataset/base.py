@@ -92,7 +92,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         if number_of_images is not None:
             self.data_info = self.data_info[:number_of_images]
         # Cache images into RAM/disk for faster training
-        self.metas = [None] * len(self)
+        self.metas = [{}] * len(self)
         self.npy_files = [None] * len(self)
         cache_images = None if cache_images == "_" else cache_images
         if cache_images == 'ram' and not self.check_cache_ram(prefix=mode):
