@@ -51,6 +51,9 @@ class XMLBasedDataset(DetectionDataset):
         if preload_anno:
             for image_name in image_names:
                 annot_file = os.path.join(self.abs_annot_dir, remove_extension(image_name) + '.xml')
+                if not os.path.exists(annot_file):
+                    self.bboxes.append([])
+                    continue
                 bboxes = self._read_annotation_file(annot_file)
                 self.bboxes.append(bboxes)
 
@@ -87,7 +90,10 @@ class XMLBasedDataset(DetectionDataset):
             label = self.bboxes[item]
         else:
             annot_file = os.path.join(self.abs_annot_dir, remove_extension(image_name) + '.xml')
-            label = self._read_annotation_file(annot_file)
+            if not os.path.exists(annot_file):
+                label = []
+            else:
+                label = self._read_annotation_file(annot_file)
 
         if self._image_transform is not None:
             img = self._image_transform(img)
@@ -129,25 +135,37 @@ if __name__ == '__main__':
     data_root = dataset_metadata["data_root"]
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
-    dataset = XMLBasedDataset(root=f'{data_root}/eval', dataset_type=dataset_type, images_dir='images',
+    dataset = XMLBasedDataset(root=f'{data_root}/val', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
 
-    for i, (img, targets) in enumerate(dataset):
+    dataset2 = XMLBasedDataset(root=f'/home/manos/data/weedDataset/small_annots/big_annots/val', dataset_type=dataset_type, images_dir='images',
+                              annotations_dir='annotations', classes=classes)
+    for i, ((img, targets), (img2, targets2)) in enumerate(zip(dataset, dataset2)):
         sum = 0
+        final_targets = []
         for target in targets:
             target_list = [target.left+1, target.top+1, target.width, target.height]
             for coordinate in target_list:
                 if coordinate < 0:
                     sum += 1
                     print(target_list)
+            area = target.width * target.height
+            if area <= 4000 and target.width <= 320 and target.height <= 320:
+                final_targets.append(target)
+        final_targets = BoundingBoxList(final_targets)
         if sum > 0:
             print(f"found in: {dataset.image_paths[i]}")
         # continue
 
-        # if dataset.image_paths[i] == "0_94c29a7cb6e9938a6501.jpg":
+        print(dataset.image_paths[i])
+        img2 = img2.opencv()
+        img2 = draw_bounding_boxes(img2, targets2, class_names=dataset2.classes)
+        img2 = cv2.resize(img2, dsize=None, fx=0.4, fy=0.4)
+        cv2.imshow('img2', img2)
+
         img = img.opencv()
-        img = draw_bounding_boxes(img, targets, class_names=dataset.classes)
-        img = cv2.resize(img, dsize=None, fx=0.9, fy=0.9)
+        img = draw_bounding_boxes(img, final_targets, class_names=dataset.classes)
+        img = cv2.resize(img, dsize=None, fx=0.5, fy=0.5)
         cv2.imshow('img', img)
         cv2.waitKey(0)
     cv2.destroyAllWindows()
