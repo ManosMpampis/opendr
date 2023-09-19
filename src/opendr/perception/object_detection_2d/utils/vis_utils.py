@@ -20,7 +20,7 @@ from opendr.engine.data import Image
 from opendr.engine.target import BoundingBoxList
 from opendr.perception.object_detection_2d.datasets.transforms import BoundingBoxListToNumpyArray
 
-np.random.seed(0)
+np.random.seed(1)
 
 
 def get_unique_color(index, num_colors, cmap='jet'):
@@ -28,7 +28,7 @@ def get_unique_color(index, num_colors, cmap='jet'):
     Generates num_colors of unique colors from the given cmap and returns the color at index.
     """
     colors = plt.get_cmap(cmap)
-    c = [int(x * 255) for x in colors(index / float(num_colors))[:3]][::-1]
+    c = [int(x * 180) for x in colors(index / float(num_colors))[:3]][::-1]
     return c
 
 
@@ -94,31 +94,28 @@ def draw_detections(img, boxes, scores, classes, class_names=None, show=False, l
     palette = VOC_COLORS
     n_classes = len(palette)
 
-    for idx, pred_box in enumerate(boxes):
+    for idx, (pred_box, score) in enumerate(zip(boxes, scores)):
         # pred_box_w, pred_box_h = pred_box[2] - pred_box[0], pred_box[3] - pred_box[1]
-        tl = line_thickness or int(0.003 * max(img.shape[:2]))
+        # tl = line_thickness or int(0.003 * max(img.shape[:2]))
+        tl = line_thickness or max(round(sum(img.shape) / 2 * 0.003), 2)  # line width
         c1 = (max(0, int(pred_box[0])), max(0, int(pred_box[1])))
         c2 = (min(img.shape[1], int(pred_box[2])), min(img.shape[0], int(pred_box[3])))
         color = tuple(palette[classes[idx] % n_classes])
 
         img = np.ascontiguousarray(img, dtype=np.uint8)
-        cv2.rectangle(img, c1, c2, color, thickness=2)
+        cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
 
         if class_names is not None:
-            label = "{}".format(class_names[classes[idx]])
+            label = "{}: {:.2f}".format(class_names[classes[idx]], float(score))
 
             t_size = cv2.getTextSize(
-                label, 0, fontScale=float(tl) / 5, thickness=1)[0]
+                label, 0, fontScale=float(tl) / 3, thickness=1)[0]
+            outside = c1[1] - t_size[1] >= 3
+            c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3 if outside else c1[1] + t_size[1] + 3
 
-            c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
-            t = - 2
-            if c2[1] < 0:
-                c2 = c1[0] + t_size[0], c1[1] + t_size[1]
-                t = t_size[1] - 4
-            cv2.rectangle(img, c1, c2, color, -1)  # filled
-
-            cv2.putText(img, label, (c1[0], c1[1] + t), 0, float(tl) / 5,
-                        [255, 255, 255], thickness=1, lineType=cv2.LINE_AA)
+            cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
+            cv2.putText(img, label, (c1[0], c1[1] - 2 if outside else c1[1] + t_size[1] + 3),
+                        0, float(tl) / 3, [255, 255, 255], thickness=max(tl - 1, 1), lineType=cv2.LINE_AA)
 
     if show:
         cv2.imshow('detections', img)

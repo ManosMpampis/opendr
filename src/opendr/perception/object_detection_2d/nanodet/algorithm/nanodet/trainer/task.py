@@ -276,6 +276,7 @@ class TrainingTask(LightningModule):
                 )
                 txt_path = os.path.join(self.cfg.save_dir, "eval_results.txt")
                 with open(txt_path, "a") as f:
+                    f.write(f"mode: {self.cfg.test_mode}\n")
                     for k, v in eval_results.items():
                         f.write("{}: {}\n".format(k, v))
                     f.write("\n" + per_clas_results)

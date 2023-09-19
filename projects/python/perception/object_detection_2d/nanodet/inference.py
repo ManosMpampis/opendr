@@ -46,7 +46,7 @@ if __name__ == '__main__':
     data_root = dataset_metadata["data_root"]
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
-    save_images = ["91d0255701a5851e8b32.jpg", "f7b31632cfc4c1f481d5.jpg"]
+    save_images = [""]
     dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
     if args.optimize != "":
@@ -55,15 +55,17 @@ if __name__ == '__main__':
     printed_classes = nanodet.classes + [f"GR: {cls}" for cls in nanodet.classes]
     for idx, (img, annotation) in enumerate(dataset):
         boxes = nanodet.infer(input=img, conf_threshold=args.conf_threshold, iou_threshold=args.iou_threshold,
-                              nms_max_num=args.nms, hf=True, bench=True)
-        # for box in annotation.boxes:
-        #     box.name = box.name + len(printed_classes)//2
-        #     boxes.add_box(box)
-        image_to_print = draw_bounding_boxes(img.opencv(), boxes, class_names=printed_classes, show=False)
+                              nms_max_num=args.nms, hf=True, bench=False)
+        if not isinstance(annotation, list):
+            for box in annotation.boxes:
+                box.name = box.name + len(printed_classes)//2
+                boxes.add_box(box)
+        image_to_print = draw_bounding_boxes(img.opencv(), boxes, class_names=printed_classes, show=False, line_thickness=2)
         if args.show:
-            image_to_print = cv2.resize(image_to_print, dsize=None, fx=0.8, fy=0.8)
-            cv2.imshow('detections', image_to_print)
-            cv2.waitKey(0)
-            if dataset.image_paths[idx] in save_images:
-                cv2.imwrite(f"/home/manos/Desktop/del_images/Nanodet/{dataset.image_paths[idx]}", image_to_print)
-            cv2.destroyAllWindows()
+            print(dataset.image_paths[idx])
+            # image_to_print = cv2.resize(image_to_print, dsize=None, fx=0.6, fy=0.6)
+            # cv2.imshow('detections', image_to_print)
+            # cv2.waitKey(0)
+            # if dataset.image_paths[idx] in save_images:
+            cv2.imwrite(f"./inference/small_test/{dataset.image_paths[idx]}", image_to_print)
+            # cv2.destroyAllWindows()

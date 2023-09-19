@@ -135,10 +135,10 @@ if __name__ == '__main__':
     data_root = dataset_metadata["data_root"]
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
-    dataset = XMLBasedDataset(root=f'{data_root}/val', dataset_type=dataset_type, images_dir='images',
+    dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
 
-    dataset2 = XMLBasedDataset(root=f'/home/manos/data/weedDataset/small_annots/big_annots/val', dataset_type=dataset_type, images_dir='images',
+    dataset2 = XMLBasedDataset(root=f'/home/manos/data/weedDataset/small_annots/big_annots/test', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
     for i, ((img, targets), (img2, targets2)) in enumerate(zip(dataset, dataset2)):
         sum = 0
@@ -160,12 +160,12 @@ if __name__ == '__main__':
         print(dataset.image_paths[i])
         img2 = img2.opencv()
         img2 = draw_bounding_boxes(img2, targets2, class_names=dataset2.classes)
-        img2 = cv2.resize(img2, dsize=None, fx=0.4, fy=0.4)
+        img2 = cv2.resize(img2, dsize=None, fx=0.3, fy=0.3)
         cv2.imshow('img2', img2)
 
         img = img.opencv()
         img = draw_bounding_boxes(img, final_targets, class_names=dataset.classes)
-        img = cv2.resize(img, dsize=None, fx=0.5, fy=0.5)
+        img = cv2.resize(img, dsize=None, fx=0.3, fy=0.3)
         cv2.imshow('img', img)
         cv2.waitKey(0)
     cv2.destroyAllWindows()

@@ -64,6 +64,26 @@ def main(args):
     with open(f'{new_path}/{val_set.dataset_type}.yaml', 'w') as yaml_file:
         yaml.dump(d, yaml_file, default_flow_style=False)
 
+    # os.makedirs(os.path.join(new_path, 'val', 'images'), exist_ok=True)
+    os.makedirs(os.path.join(new_path, 'val', 'labels'), exist_ok=True)
+    for idx, (img, boxes) in enumerate(val_set):
+        name = val_set.image_paths[idx][:-4]
+        # save img to 'train/images/im{:05d}.jpg'
+        im_cv = img.opencv()
+        # cv2.imwrite(os.path.join(new_path, 'eval', 'images', f'{name}.jpg'), im_cv)
+        im_height, im_width, im_c = im_cv.shape
+        # save normalized label to 'train/labels/im{:05d}.txt
+        lines = ''
+        for box in boxes:
+            x_center = (box.left + box.width * 0.5) / im_width
+            y_center = (box.top + box.height * 0.5) / im_height
+            width = box.width / im_width
+            height = box.height / im_height
+            lines += f'{box.name} {x_center} {y_center} {width} {height}\n'
+        if len(lines) > 0:
+            with open(os.path.join(new_path, 'val', 'labels', f'{name}.txt'), 'w') as f:
+                f.write(lines)
+
     # step 2: convert annotations to .txt files
     # train set
     # os.makedirs(os.path.join(new_path, 'train', 'images'), exist_ok=True)
@@ -107,32 +127,12 @@ def main(args):
             with open(os.path.join(new_path, 'test', 'labels', f'{name}.txt'), 'w') as f:
                 f.write(lines)
 
-    # os.makedirs(os.path.join(new_path, 'val', 'images'), exist_ok=True)
-    os.makedirs(os.path.join(new_path, 'val', 'labels'), exist_ok=True)
-    for idx, (img, boxes) in enumerate(val_set):
-        name = val_set.image_paths[idx][:-4]
-        # save img to 'train/images/im{:05d}.jpg'
-        im_cv = img.opencv()
-        # cv2.imwrite(os.path.join(new_path, 'eval', 'images', f'{name}.jpg'), im_cv)
-        im_height, im_width, im_c = im_cv.shape
-        # save normalized label to 'train/labels/im{:05d}.txt
-        lines = ''
-        for box in boxes:
-            x_center = (box.left + box.width * 0.5) / im_width
-            y_center = (box.top + box.height * 0.5) / im_height
-            width = box.width / im_width
-            height = box.height / im_height
-            lines += f'{box.name} {x_center} {y_center} {width} {height}\n'
-        if len(lines) > 0:
-            with open(os.path.join(new_path, 'val', 'labels', f'{name}.txt'), 'w') as f:
-                f.write(lines)
-
 
 if __name__ == '__main__':
-    dataset_main_path = "/home/manos/data/weedDataset"
+    dataset_main_path = "/home/manos/data/weedDataset/small_annots/"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--original-data-path", help="Dataset root", type=str, default=f"{dataset_main_path}/cropped_mean_annot")
-    parser.add_argument("--new-data-path", help="Path to converted dataset location", type=str, default=f"{dataset_main_path}/cropped_mean_annot")
+    parser.add_argument("--original-data-path", help="Dataset root", type=str, default=f"{dataset_main_path}")
+    parser.add_argument("--new-data-path", help="Path to converted dataset location", type=str, default=f"{dataset_main_path}")
 
     args = parser.parse_args()
 

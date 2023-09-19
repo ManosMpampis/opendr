@@ -43,6 +43,6 @@ if __name__ == '__main__':
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
 
-    dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
+    dataset = XMLBasedDataset(root=f'{data_root}/val', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
-    nanodet.eval(dataset, verbose=True, logging=True, mode="val")
+    nanodet.eval(dataset, verbose=True, logging=True, mode="test")
