@@ -134,7 +134,7 @@ class CocoDataset(BaseDataset):
         if fn is not None:
             img = np.load(image_path)
         else:
-            if image_path[-4:] != ".jpg":
+            if image_path[-4:] not in [".jpg", ".png", ".bmp"]:
                 image_path = image_path + ".jpg"
             img = cv2.imread(image_path)
         if img is None:

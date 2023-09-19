@@ -38,7 +38,6 @@ class VggSmall(nn.Module):
     def __init__(
         self,
         out_stages=(0, 1, 2, 3),
-        stages_inplanes=(3, 8, 8, 6),
         stages_outplanes=(8, 8, 6, 6),
         stages_strides=(2, 1, 1, 1),
         stages_kernels=(3, 3, 3, 3),
@@ -47,15 +46,15 @@ class VggSmall(nn.Module):
         maxpool_stride=1,
         activation="ReLU",
         quant=False,
-        pretrain=True
+        pretrain=False
     ):
         super(VggSmall, self).__init__()
-        self.num_layers = len(stages_inplanes)
+        self.num_layers = len(stages_outplanes)
         for layers_args in [stages_outplanes, stages_kernels, stages_strides, stages_padding, maxpool_after]:
             if len(layers_args) != self.num_layers :
                 raise KeyError(
                     f"Not all convolution args have the same length")
-        assert set(out_stages).issubset(range(len(stages_inplanes)))
+        assert set(out_stages).issubset(range(len(stages_outplanes)))
 
         act = act_layers(activation)
         maxpool = nn.MaxPool2d(kernel_size=2, stride=maxpool_stride, padding=1)
@@ -63,7 +62,8 @@ class VggSmall(nn.Module):
         self.out_stages = out_stages
 
         self.backbone = nn.ModuleList()
-        for idx, (inch, ouch, k, s, p, mp) in enumerate(zip(stages_inplanes, stages_outplanes, stages_kernels, stages_strides, stages_padding, maxpool_after)):
+        for idx, (ouch, k, s, p, mp) in enumerate(zip(stages_outplanes, stages_kernels, stages_strides, stages_padding, maxpool_after)):
+            inch = 3 if idx == 0 else stages_outplanes[idx - 1]
             conv = Convs[1] if mp != 0 else Convs[0]
             self.backbone.append(conv(inch, ouch, k=k, s=s, p=p, act=act, pool=maxpool))
             self.backbone[-1].i = idx
@@ -140,14 +140,15 @@ class VggSmall(nn.Module):
 if __name__ == '__main__':
     from torch.utils.tensorboard import SummaryWriter
     model = VggSmall(
-        out_stages=(2, 3),
-        stages_inplanes=(3, 8, 8, 8),
-        stages_outplanes=(8, 8, 8, 8),
-        stages_strides=(2, 2, 1, 2),
-        maxpool_after=(0, 0, 1, 0),
+        out_stages=(4, 6, 10),
+        stages_outplanes=(32, 64, 64, 128, 128, 256, 256, 512, 512, 512, 512),
+        stages_strides=  (2,  2,  1,  2,   1,   2,   1,   2,   1,   1,   1),
+        stages_kernels=  (3,  3,  3,  3,   3,   3,   3,   3,   3,   3,   3),
+        stages_padding=  (1,  1,  1,  1,   1,   1,   1,   1,   1,   1,   1),
+        maxpool_after=   (0,  0,  0,  0,   0,   0,   0,   0,   0,   0,   0),
         maxpool_stride=1,
         activation="ReLU",
-        pretrain=True
+        pretrain=False
     )
     for m in model.modules():
         print(m)
