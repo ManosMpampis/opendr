@@ -204,7 +204,7 @@ class GhostBottleneck(nn.Module):
         # Depth-wise convolution
         if self.stride > 1:
             x = self.conv_dw(x)
-            x = self.bn_dw(x) #
+            x = self.bn_dw(x)
 
         # Squeeze-and-excitation
         if self.se is not None:
