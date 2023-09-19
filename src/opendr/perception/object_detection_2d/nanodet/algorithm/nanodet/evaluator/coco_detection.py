@@ -92,7 +92,7 @@ class CocoDetectionEvaluator:
             empty_eval_results = {}
             for key in self.metric_names:
                 empty_eval_results[key] = 0
-            return empty_eval_results
+            return empty_eval_results, ""
         if rank > 0:
             json_path = os.path.join(save_dir, "results{}.json".format(rank))
         else:
