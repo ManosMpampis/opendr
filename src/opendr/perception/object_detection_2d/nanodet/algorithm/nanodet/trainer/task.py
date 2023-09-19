@@ -142,7 +142,7 @@ class TrainingTask(LightningModule):
             checkpoint_save_path = os.path.join(self.cfg.save_dir, "checkpoints")
             mkdir(self.local_rank, checkpoint_save_path)
             self.info("===" * 10)
-            self.info(f"checkpoint_save_path: {checkpoint_save_path} \n epoch: {self.current_epoch}")
+            self.info(f"checkpoint_save_path: {checkpoint_save_path}  ||   epoch: {self.current_epoch}")
             self.info("===" * 10)
             self.trainer.save_checkpoint(
                 os.path.join(checkpoint_save_path, "model_iter_{}.ckpt".format(self.current_epoch))
