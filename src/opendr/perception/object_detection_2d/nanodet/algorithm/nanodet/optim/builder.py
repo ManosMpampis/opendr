@@ -20,6 +20,7 @@ def build_optimizer(model, config):
     >>>   param_level_cfg:  # parameter-level config
     >>>     backbone:
     >>>       lr_mult: 0.1
+    >>>       decay_mult: 0.1
     """
     config = copy.deepcopy(config)
     param_dict = {}

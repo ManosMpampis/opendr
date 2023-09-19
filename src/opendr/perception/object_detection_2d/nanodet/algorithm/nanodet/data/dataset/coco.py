@@ -157,8 +157,8 @@ class CocoDataset(BaseDataset):
         :param idx:
         :return: meta-data (a dict containing image, annotation and other information)
         """
-        meta = self.metas[idx]  # if cache is ram
-        if meta is None:
+        meta = self.metas[idx].copy()  # if cache is ram
+        if len(meta) == 0:
             meta = self.get_data(idx)
         input_size = self.input_size
 

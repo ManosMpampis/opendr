@@ -111,7 +111,7 @@ class TrainingTask(LightningModule):
         # log train losses
         if (self.global_step + 1) % self.cfg.log.interval == 0:
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
-            lr = self.optimizers().param_groups[0]["lr"]
+            lr = self.trainer.optimizers[0].param_groups[0]["lr"]
             log_msg = "Train|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
                 self.current_epoch,
                 self.cfg.schedule.total_epochs,
@@ -168,27 +168,23 @@ class TrainingTask(LightningModule):
 
         if batch_idx % self.cfg.log.interval == 0:
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
-            lr = self.optimizers().param_groups[0]["lr"]
-            log_msg = "Val|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
+            log_msg = "Val|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| ".format(
                 self.current_epoch,
                 self.cfg.schedule.total_epochs,
                 (self.current_epoch + 1) * batch_idx,
                 batch_idx,
                 sum(self.trainer.num_val_batches),
                 memory,
-                lr,
             )
             self.info(log_msg)
 
         if (batch_idx + 1) == sum(self.trainer.num_val_batches):
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
-            lr = self.optimizers().param_groups[0]["lr"]
-            log_msg = "Val|Epoch{}/{}|Iter{}| mem:{:.3g}G| lr:{:.2e}| ".format(
+            log_msg = "Val|Epoch{}/{}|Iter{}| mem:{:.3g}G| ".format(
                 self.current_epoch,
                 self.cfg.schedule.total_epochs,
                 self.global_step,
                 memory,
-                lr,
             )
             for loss_name in self.val_losses:
                 log_msg += "{}:{:.4f}| ".format(

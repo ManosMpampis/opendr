@@ -778,12 +778,6 @@ class NanodetLearner(Learner):
                 strategy = "ddp"
                 env_utils.set_multi_processing(distributed=True)
 
-        # gpu_ids = None
-        # accelerator = None
-        # if self.device == "cuda":
-        #     gpu_ids = self.cfg.device.gpu_ids
-        #     accelerator = None if len(gpu_ids) <= 1 else "ddp"
-
         trainer = pl.Trainer(
             default_root_dir=self.temp_path,
             max_epochs=self.iters,
@@ -791,17 +785,16 @@ class NanodetLearner(Learner):
             accelerator=accelerator,
             strategy=strategy,
             devices=devices,
-            # gpus=gpu_ids,
             log_every_n_steps=self.cfg.log.interval,
             num_sanity_val_steps=0,
-            # resume_from_checkpoint=model_resume_path,
             callbacks=[TQDMProgressBar(refresh_rate=0)],
             logger=self.logger,
             profiler="pytorch" if profile else None,
             benchmark=cfg.get("cudnn_benchmark", True),
             precision=precision,
             gradient_clip_val=self.cfg.get("grad_clip", 0.0),
-            move_metrics_to_cpu=True
+            move_metrics_to_cpu=True,
+            # deterministic=True
         )
 
         trainer.fit(self.task, train_dataloader, val_dataloader, ckpt_path=model_resume_path)
