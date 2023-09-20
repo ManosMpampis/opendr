@@ -31,7 +31,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backb
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_repvgg import RepVGGSmall
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_resnet import ResNetSmall
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_shufflenetv2 import ShuffleNetV2Small
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_cnn import VggSmall
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.vgg import Vgg
 
 
 def build_backbone(cfg):
@@ -61,8 +61,8 @@ def build_backbone(cfg):
         return ResNetSmall(**backbone_cfg)
     elif name == "ShuffleNetV2Small":
         return ShuffleNetV2Small(**backbone_cfg)
-    elif name == "SmallVgg":
-        return VggSmall(**backbone_cfg)
+    elif name == "Vgg":
+        return Vgg(**backbone_cfg)
     elif name == "SimpleCnn":
         return SimpleCnn(**backbone_cfg)
     elif name == "SimpleCnn_2":

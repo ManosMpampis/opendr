@@ -9,11 +9,11 @@ model:
     name: NanoDetPlus
     detach_epoch: 10
     backbone:
-      name: SimpleCnn
+      name: Vgg
       out_stages:       [4, 6, 10]
       stages_outplanes: [32, 64, 64, 128, 128, 256, 256, 512, 512, 512, 512]
-      stages_kernels:   [2,  2,  1,  2,   1,   2,   1,   2,   1,   1,   1]
-      stages_strides:   [3,  3,  3,  3,   3,   3,   3,   3,   3,   3,   3]
+      stages_kernels:   [3,  3,  3,  3,   3,   3,   3,   3,   3,   3,   3]
+      stages_strides:   [2,  2,  1,  2,   1,   2,   1,   2,   1,   1,   1]
       stages_padding:   [1,  1,  1,  1,   1,   1,   1,   1,   1,   1,   1]
       maxpool_after:    [0,  0,  0,  0,   0,   0,   0,   0,   0,   0,   0]
       maxpool_stride: 1
@@ -22,10 +22,10 @@ model:
       quant: False
       pretrain: False
     fpn:
-      name: SimpleGPAN #PAN #FPN  #PAN a litle slower than FPN
+      name: SimpleGPAN
       in_channels: [128, 256, 512]
       out_channels: 256
-      use_depthwise: True
+      use_depthwise: False
       kernel_size: 5
       num_blocks: 1
       upsample_cfg:

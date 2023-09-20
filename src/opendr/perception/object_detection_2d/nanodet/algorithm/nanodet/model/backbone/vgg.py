@@ -1,14 +1,22 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
 import torch.jit
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import (Conv, ConvPool,
-                                                                                               ConvQuant, ConvPoolQuant)
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import fuse_modules
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import (
+    Conv,
+    ConvPool,
+    DWConv,
+    DWConvPool,
+    ConvQuant,
+    ConvPoolQuant,
+    DWConvQuant,
+    DWConvPoolQuant,
+    MultiOutput,
+    fuse_modules)
+
 
 
 model_urls = {
@@ -23,17 +31,7 @@ model_urls = {
 }
 
 
-class MultiOutput(nn.Module):
-    # Concatenate a list of tensors along dimension
-    def __init__(self):
-        super(MultiOutput, self).__init__()
-
-    def forward(self, x):
-        outs = [out for out in x]
-        return outs
-
-
-class VggSmall(nn.Module):
+class Vgg(nn.Module):
 
     def __init__(
         self,
@@ -46,9 +44,10 @@ class VggSmall(nn.Module):
         maxpool_stride=1,
         activation="ReLU",
         quant=False,
+        use_depthwise=False,
         pretrain=False
     ):
-        super(VggSmall, self).__init__()
+        super(Vgg, self).__init__()
         self.num_layers = len(stages_outplanes)
         for layers_args in [stages_outplanes, stages_kernels, stages_strides, stages_padding, maxpool_after]:
             if len(layers_args) != self.num_layers :
@@ -58,7 +57,12 @@ class VggSmall(nn.Module):
 
         act = act_layers(activation)
         maxpool = nn.MaxPool2d(kernel_size=2, stride=maxpool_stride, padding=1)
-        Convs = (ConvQuant, ConvPoolQuant) if quant else (Conv, ConvPool)
+
+        if use_depthwise:
+            Convs = (DWConvQuant, DWConvPoolQuant) if quant else (DWConv, DWConvPool)
+        else:
+            Convs = (ConvQuant, ConvPoolQuant) if quant else (Conv, ConvPool)
+
         self.out_stages = out_stages
 
         self.backbone = nn.ModuleList()
@@ -139,7 +143,7 @@ class VggSmall(nn.Module):
 
 if __name__ == '__main__':
     from torch.utils.tensorboard import SummaryWriter
-    model = VggSmall(
+    model = Vgg(
         out_stages=(4, 6, 10),
         stages_outplanes=(32, 64, 64, 128, 128, 256, 256, 512, 512, 512, 512),
         stages_strides=  (2,  2,  1,  2,   1,   2,   1,   2,   1,   1,   1),
@@ -148,7 +152,8 @@ if __name__ == '__main__':
         maxpool_after=   (0,  0,  0,  0,   0,   0,   0,   0,   0,   0,   0),
         maxpool_stride=1,
         activation="ReLU",
-        pretrain=False
+        pretrain=False,
+        use_depthwise=False,
     )
     for m in model.modules():
         print(m)
@@ -157,9 +162,8 @@ if __name__ == '__main__':
         if param.requires_grad:
             print(name)
     model = model.to("cpu")
-    imgsz = (1, 3, 1080, 1920)
-    hf = False
-    __dumy_input = torch.empty(*imgsz, dtype=torch.half if hf else torch.float, device="cpu")
+    imgsz = (1, 3, 1088, 1920)
+    __dumy_input = torch.empty(*imgsz, dtype=torch.float, device="cpu")
     writer = SummaryWriter(f'./models/vggSmall')
     writer.add_graph(model.eval(), __dumy_input)
     writer.close()

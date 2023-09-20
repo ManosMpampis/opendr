@@ -85,14 +85,22 @@ class NanoDetPlus(OneStageDetector):
 
 
 if __name__ == '__main__':
-    cfg = _load_hparam("test_plus")
+    from torch.utils.tensorboard import SummaryWriter
+    cfg = _load_hparam("yoloLike")
     model_cfg = copy.deepcopy(cfg.model)
     name = model_cfg.arch.pop("name")
     assert name == "NanoDetPlus"
 
     model = NanoDetPlus(
         **model_cfg.arch
-    ).eval()
+    ).eval().to("cpu")
+
+    imgsz = (1, 3, 1088, 1920)
+    __dumy_input = torch.empty(*imgsz, dtype=torch.float, device="cpu")
+
+    writer = SummaryWriter(f'./models/full_model')
+    writer.add_graph(model.eval(), __dumy_input)
+    writer.close()
 
     print(model)
     print("=========================================")

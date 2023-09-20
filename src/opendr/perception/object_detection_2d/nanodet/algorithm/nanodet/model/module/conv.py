@@ -5,7 +5,6 @@ RepVGGConvModule refers from RepVGG: Making VGG-style ConvNets Great Again
 import warnings
 
 import numpy as np
-import math
 import torch
 import torch.nn as nn
 
@@ -68,17 +67,6 @@ def fuse_modules(m):
             fuse_modules(m_in_list)
 
 
-class DWConvQuant(nn.Module):
-    # Depth-wise convolution
-    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
-        super().__init__()
-        self.depthwise = ConvQuant(c1, c1, k, s=s, p=p, d=d, g=c1, act=act)
-        self.pointwise = ConvQuant(c1, c2, k=1, s=1, p=0, act=act)
-
-    def forward(self, x):
-        return self.pointwise(self.depthwise(x))
-
-
 class Conv(nn.Module):
     # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
     default_act = nn.SiLU()  # default activation
@@ -106,43 +94,6 @@ class Conv(nn.Module):
                 )
                 m.bn.weight.data.fill_(1)
                 m.bn.bias.data.zero_()
-
-
-class ConvPool(Conv):
-    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
-    default_act = nn.SiLU()  # default activation
-    default_pool = nn.MaxPool2d(kernel_size=2, stride=1, padding=1)
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
-        super(ConvPool, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act, pool=pool)
-        self.pool = self.default_pool if pool is True else pool if isinstance(pool, nn.Module) else nn.Identity()
-
-    def forward(self, x):
-        return self.act(self.pool(self.bn(self.conv(x))))
-
-    def forward_fuse(self, x):
-        return self.act(self.pool(self.conv(x)))
-
-
-class ConvPoolQuant(ConvPool):
-    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
-        super(ConvPoolQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-
-    def forward(self, x):
-        x = self.quant(x)
-        x = super().forward(x)
-        x = self.dequant(x)
-        return x
-
-    def forward_fuse(self, x):
-        x = self.quant(x)
-        x = super().forward_fuse(x)
-        x = self.dequant(x)
-        return x
 
 
 class ConvQuant(Conv):
@@ -187,6 +138,42 @@ class ConvQuant(Conv):
         prepare_save(model_fused, True)
 
 
+class ConvPool(Conv):
+    # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
+    default_pool = nn.MaxPool2d(kernel_size=2, stride=1, padding=1)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
+        super(ConvPool, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act, pool=pool)
+        self.pool = self.default_pool if pool is True else pool if isinstance(pool, nn.Module) else nn.Identity()
+
+    def forward(self, x):
+        return self.act(self.pool(self.bn(self.conv(x))))
+
+    def forward_fuse(self, x):
+        return self.act(self.pool(self.conv(x)))
+
+
+class ConvPoolQuant(ConvPool):
+    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
+        super(ConvPoolQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = super().forward(x)
+        x = self.dequant(x)
+        return x
+
+    def forward_fuse(self, x):
+        x = self.quant(x)
+        x = super().forward_fuse(x)
+        x = self.dequant(x)
+        return x
+
+
 class DWConv(nn.Module):
     def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
         super().__init__()
@@ -195,6 +182,91 @@ class DWConv(nn.Module):
 
     def forward(self, x):
         return self.pointwise(self.depthwise(x))
+
+
+class DWConvQuant(DWConv):
+    # Depth-wise convolution
+    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
+        super(DWConvQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = super().forward(x)
+        x = self.dequant(x)
+        return x
+
+    def forward_fuse(self, x):
+        x = self.quant(x)
+        x = super().forward_fuse(x)
+        x = self.dequant(x)
+        return x
+
+
+class DWConvPool(nn.Module):
+    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
+    default_pool = nn.MaxPool2d(kernel_size=2, stride=1, padding=1)
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
+        super(DWConvPool, self).__init__()
+        self.pool = self.default_pool if pool is True else pool if isinstance(pool, nn.Module) else nn.Identity()
+        self.depthwise = ConvPool(c1, c1, k, s=s, p=p, d=d, g=c1, act=act, pool=pool)
+        self.pointwise = ConvPool(c1, c2, k=1, s=1, p=0, act=act, pool=pool)
+
+    def forward(self, x):
+        return self.pointwise(self.depthwise(x))
+
+
+class DWConvPoolQuant(DWConvPool):
+    # Depth-wise convolution
+    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
+        super(DWConvPoolQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act, pool=pool)
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = super().forward(x)
+        x = self.dequant(x)
+        return x
+
+    def forward_fuse(self, x):
+        x = self.quant(x)
+        x = super().forward_fuse(x)
+        x = self.dequant(x)
+        return x
+
+
+class MultiOutput(nn.Module):
+    # Output a list of tensors
+    def __init__(self):
+        super(MultiOutput, self).__init__()
+
+    def forward(self, x):
+        outs = [out for out in x]
+        return outs
+
+
+class Concat(nn.Module):
+    # Concatenate a list of tensors along dimension
+    def __init__(self, dimension=1):
+        super().__init__()
+        self.d = dimension
+
+    def forward(self, x):
+        return torch.cat(x, self.d)
+
+
+class Flatten(nn.Module):
+    # Concatenate a list of tensors along dimension
+    def __init__(self, start_dim=1, end_dim=-1):
+        super().__init__()
+        self.s = start_dim
+        self.e = end_dim
+
+    def forward(self, x):
+        return torch.flatten(x, start_dim=self.s, end_dim=self.e)
 
 
 class ConvModule(nn.Module):

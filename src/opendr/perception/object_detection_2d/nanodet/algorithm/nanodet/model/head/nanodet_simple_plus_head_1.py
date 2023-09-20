@@ -51,7 +51,7 @@ def _load_hparam(model: str):
     return cfg
 
 
-class SimplifierNanoDetPlusHead(nn.Module):
+class SimplifierNanoDetPlusHead_1(nn.Module):
     """Detection head used in NanoDet-Plus.
 
     Args:
@@ -93,7 +93,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
         quant=False,
         **kwargs
     ):
-        super(SimplifierNanoDetPlusHead, self).__init__()
+        super(SimplifierNanoDetPlusHead_1, self).__init__()
         self.fork = fork
         self.num_classes = num_classes
         self.in_channels = input_channel
@@ -633,9 +633,9 @@ if __name__ == '__main__':
     model_cfg = copy.deepcopy(cfg.model)
     head_cfg = copy.deepcopy(model_cfg.arch.head)
     name = head_cfg.pop("name")
-    assert name == "SimplifierNanoDetPlusHead"
+    assert name == "SimplifierNanoDetPlusHead_1"
 
-    model = SimplifierNanoDetPlusHead(
+    model = SimplifierNanoDetPlusHead_1(
         **head_cfg
     ).eval()
 

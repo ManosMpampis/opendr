@@ -4,8 +4,9 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_head import NanoDetHead
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_plus_head import NanoDetPlusHead
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.simple_conv_head import SimpleConvHead
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head import SimplifierNanoDetPlusHead
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head_1 import SimplifierNanoDetPlusHead_1
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head_2 import SimplifierNanoDetPlusHead_2
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.simple_nanodet_plus import SimplifierNanoDetPlusHead
 
 
 def build_head(cfg):
@@ -21,6 +22,8 @@ def build_head(cfg):
         return SimpleConvHead(**head_cfg)
     elif name == "SimplifierNanoDetPlusHead":
         return SimplifierNanoDetPlusHead(**head_cfg)
+    elif name == "SimplifierNanoDetPlusHead_1":
+        return SimplifierNanoDetPlusHead_1(**head_cfg)
     elif name == "SimplifierNanoDetPlusHead_2":
         return SimplifierNanoDetPlusHead_2(**head_cfg)
     else:

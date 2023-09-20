@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/simple_big_ch_very_small_annots
-check_point_name: simple_big_ch_very_small_annots
+save_dir: ./temp/simple_big_ch_very_small_annots_SGD
+check_point_name: simple_big_ch_very_small_annots_SGD
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -15,7 +15,7 @@ model:
       quant: False
       pretrain: False
     fpn:
-      name: SimpleGPAN #PAN #FPN  #PAN a litle slower than FPN
+      name: SimpleGPAN_1 #PAN #FPN  #PAN a litle slower than FPN
       in_channels: [ 32, 64 ]
       out_channels: 32
       use_depthwise: True
@@ -27,7 +27,7 @@ model:
       activation: LeakyReLU
       quant: False
     head:
-      name: SimplifierNanoDetPlusHead #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
+      name: SimplifierNanoDetPlusHead_1 #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
       num_classes: 2
       input_channel: 32
       feat_channels: 32
@@ -101,14 +101,14 @@ data:
 #      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # full annots
 device:
   gpu_ids: [0]
-  workers_per_gpu: 1
+  workers_per_gpu: 4
   batchsize_per_gpu: 1
   precision: 32
 schedule:
   resume: 0
   optimizer:
-    name: AdamW
-    lr: 0.001
+    name: SGD
+    lr: 0.005
     weight_decay: 0.05
   warmup:
     name: linear

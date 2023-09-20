@@ -18,8 +18,9 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.f
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.ghost_pan import GhostPAN
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.pan import PAN
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.tan import TAN
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.simpleGost import SimpleGPAN
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.simpleGost_1 import SimpleGPAN_1
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.simpleGost_2 import SimpleGPAN_2
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.simpleGost import SimpleGPAN
 
 
 def build_fpn(cfg):
@@ -35,6 +36,8 @@ def build_fpn(cfg):
         return GhostPAN(**fpn_cfg)
     elif name == "SimpleGPAN":
         return SimpleGPAN(**fpn_cfg)
+    elif name == "SimpleGPAN_1":
+        return SimpleGPAN_1(**fpn_cfg)
     elif name == "SimpleGPAN_2":
         return SimpleGPAN_2(**fpn_cfg)
     else:
