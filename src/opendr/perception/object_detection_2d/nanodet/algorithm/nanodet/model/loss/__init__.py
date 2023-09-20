@@ -4,6 +4,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.
     HingeLoss
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.iou_loss import IoULoss, BoundedIoULoss,\
     GIoULoss, DIoULoss, CIoULoss
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.yolov5_loss import YoloLoss
 
 __all__ = ['QualityFocalLoss', 'DistributionFocalLoss', 'CrossEntropyLoss', 'HingeLoss',
-           'IoULoss', 'BoundedIoULoss', 'GIoULoss', 'DIoULoss', 'CIoULoss']
+           'IoULoss', 'BoundedIoULoss', 'GIoULoss', 'DIoULoss', 'CIoULoss', 'YoloLoss']

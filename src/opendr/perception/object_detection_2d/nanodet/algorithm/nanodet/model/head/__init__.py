@@ -7,7 +7,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head_1 import SimplifierNanoDetPlusHead_1
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head_2 import SimplifierNanoDetPlusHead_2
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.simple_nanodet_plus import SimplifierNanoDetPlusHead
-
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.yolo import YoloHead
 
 def build_head(cfg):
     head_cfg = copy.deepcopy(cfg)
@@ -26,5 +26,7 @@ def build_head(cfg):
         return SimplifierNanoDetPlusHead_1(**head_cfg)
     elif name == "SimplifierNanoDetPlusHead_2":
         return SimplifierNanoDetPlusHead_2(**head_cfg)
+    elif name == "YoloHead":
+        return YoloHead(**head_cfg)
     else:
         raise NotImplementedError

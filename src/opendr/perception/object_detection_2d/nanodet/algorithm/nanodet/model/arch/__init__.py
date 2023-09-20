@@ -17,7 +17,7 @@ import warnings
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch.nanodet_plus import NanoDetPlus
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch.one_stage_detector import OneStageDetector
-
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch.yolo_arch import YoloArch
 
 def build_model(model_cfg):
     model_cfg = copy.deepcopy(model_cfg)
@@ -37,6 +37,8 @@ def build_model(model_cfg):
         )
     elif name == "NanoDetPlus":
         model = NanoDetPlus(**model_cfg.arch)
+    elif name == "YoloArch":
+        model = YoloArch(**model_cfg)
     else:
         raise NotImplementedError
     return model
