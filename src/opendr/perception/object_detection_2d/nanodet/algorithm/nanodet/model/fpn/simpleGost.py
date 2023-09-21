@@ -87,7 +87,7 @@ class Sum(nn.Module):
 
 class GhostConv(nn.Module):
     # Ghost Convolution https://github.com/huawei-noah/ghostnet
-    def __init__(self, c1, c2, k=1, r=2, dw_k=3, s=1, act=True, quant=False):  # ch_in, ch_out, kernel, ratio, dw_kernel, stride
+    def __init__(self, c1, c2, k=1, r=2, dw_k=5, s=1, act=True, quant=False):  # ch_in, ch_out, kernel, ratio, dw_kernel, stride
         super().__init__()
         self.c2 = c2
         c_ = math.ceil(c2 / r)
@@ -159,7 +159,7 @@ class SimpleGB(nn.Module):
 
         blocks = []
         for idx in range(num_blocks):
-            in_ch = in_channels if idx == 0 else in_channels // 2
+            in_ch = in_channels if idx == 0 else out_channels
             blocks.append(
                 GhostBottleneck(
                     in_ch,
@@ -209,7 +209,7 @@ class SimpleGPAN(nn.Module):
         num_blocks=1,
         use_res=False,
         num_extra_level=0,
-        upsample_cfg=dict(scale_factor=2, mode="bilinear"),
+        upsample_cfg=dict(scale_factor=2, mode="nearest"), #"bilinear"),
         activation="LeakyReLU",
         quant=False,
     ):
@@ -219,6 +219,7 @@ class SimpleGPAN(nn.Module):
         self.out_channels = out_channels
         self.needed = []
         self.out_stages = []
+        modes = ["linear", "bilinear", "bicubic", "trilinear"]
         si = len(self.in_channels)  # starting idx
 
         if use_depthwise:
@@ -235,7 +236,7 @@ class SimpleGPAN(nn.Module):
         for idx in range(len(in_channels) -1, 0, -1):
             name_idx = len(in_channels)-1-idx
 
-            upsample = nn.Upsample(**upsample_cfg, align_corners=False)
+            upsample = nn.Upsample(**upsample_cfg, align_corners=False if upsample_cfg.mode in modes else None)
             upsample.i = si + 1
             upsample.f = -1
             top_down_blocks.add_module(f"Upsample_{name_idx}", upsample)

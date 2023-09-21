@@ -3,7 +3,7 @@ ConvModule refers from MMDetection
 RepVGGConvModule refers from RepVGG: Making VGG-style ConvNets Great Again
 """
 import warnings
-
+from typing import List
 import numpy as np
 import torch
 import torch.nn as nn
@@ -254,7 +254,7 @@ class Concat(nn.Module):
         super().__init__()
         self.d = dimension
 
-    def forward(self, x):
+    def forward(self, x: List[torch.Tensor]):
         return torch.cat(x, self.d)
 
 

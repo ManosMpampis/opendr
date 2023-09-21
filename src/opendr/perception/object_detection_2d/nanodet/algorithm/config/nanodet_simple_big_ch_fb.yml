@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/yoloLike
-check_point_name: yoloLike
+save_dir: ./temp/simple_big_ch_football
+check_point_name: simple_big_ch_football
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -9,43 +9,34 @@ model:
     name: NanoDetPlus
     detach_epoch: 10
     backbone:
-      name: Vgg
-      out_stages:       [4, 6, 10]
-      stages_outplanes: [32, 64, 64, 128, 128, 256, 256, 512, 512, 512, 512]
-      stages_kernels:   [3,  3,  3,  3,   3,   3,   3,   3,   3,   3,   3]
-      stages_strides:   [2,  2,  1,  2,   1,   2,   1,   2,   1,   1,   1]
-      stages_padding:   [1,  1,  1,  1,   1,   1,   1,   1,   1,   1,   1]
-      maxpool_after:    [0,  0,  0,  0,   0,   0,   0,   0,   0,   0,   0]
-      maxpool_stride: 1
-      activation: SiLU
+      name: SimpleCnn_3
+      activation: LeakyReLU
       use_depthwise: False
       quant: False
       pretrain: False
     fpn:
-      name: SimpleGPAN
-      in_channels: [128, 256, 512]
-      out_channels: 256
-      use_depthwise: False
-      kernel_size: 3
-      expand: 0.5
-      use_res: False
+      name: SimpleGPAN_1 #PAN #FPN  #PAN a litle slower than FPN
+      in_channels: [ 32, 64 ]
+      out_channels: 32
+      use_depthwise: True
+      kernel_size: 5
       num_blocks: 1
       upsample_cfg:
         scale_factor: 2
-        mode: nearest
-      activation: SiLU
+        mode: bilinear
+      activation: LeakyReLU
       quant: False
     head:
-      name: SimplifierNanoDetPlusHead #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
+      name: SimplifierNanoDetPlusHead_1 #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
       num_classes: 1
-      input_channel: 256
-      feat_channels: 256
-      stacked_convs: 0
+      input_channel: 32
+      feat_channels: 32
+      stacked_convs: 3
       kernel_size: 3 #Only in NanoDetPlusHead
-      strides: [8, 16, 32]
+      strides: [ 8, 16 ]
       use_depthwise: True
       reg_max: 7
-      activation: SiLU
+      activation: LeakyReLU
       quant: False
       fork: False
       norm_cfg:
@@ -69,7 +60,7 @@ model:
       input_channel: 64
       feat_channels: 64
       stacked_convs: 4
-      strides: [8, 16, 32]
+      strides: [8, 16]
       activation: LeakyReLU
       reg_max: 7
 data:

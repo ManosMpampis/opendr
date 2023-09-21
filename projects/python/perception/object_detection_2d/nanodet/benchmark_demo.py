@@ -19,12 +19,12 @@ from opendr.engine.data import Image
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="simple_big_ch")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="yoloLike")#big_ch")
     parser.add_argument("--optimize-jit", help="", action="store_false")
     parser.add_argument("--optimize-trt", help="", action="store_false")
     parser.add_argument("--download", help="", action="store_true")
     parser.add_argument("--hf", help="", action="store_false")
-    parser.add_argument("--int", help="", action="store_false")
+    parser.add_argument("--int", help="", action="store_true")
     parser.add_argument("--fuse", help="", action="store_false")
     parser.add_argument("--ch_l", help="", action="store_true")
     parser.add_argument("--dynamic", help="", action="store_true")
@@ -44,8 +44,9 @@ if __name__ == '__main__':
     classes = dataset_metadata["classes"]
     dataset_type = dataset_metadata["dataset_type"]
     from opendr.perception.object_detection_2d.datasets import XMLBasedDataset
-    dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
-                              annotations_dir='annotations', classes=classes)
+    # dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
+    #                           annotations_dir='annotations', classes=classes)
+    dataset = None
 
     nanodet = NanodetLearner(model_to_use=args.model, device=args.device, model_log_name=f"{args.model}")
 

@@ -599,7 +599,7 @@ class NanodetLearner(Learner):
             metadata = {"model_paths": [f"nanodet_{self.cfg.check_point_name}.pth"], "framework": "pytorch",
                         "format": "pth", "has_data": False, "optimized": True, "optimizer_info": {},
                         "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
-                                             "conf_threshold": predictor.conf_thresholdold, "iou_threshold": predictor.iou_thresholdold}}
+                                             "conf_threshold": predictor.conf_threshold, "iou_threshold": predictor.iou_threshold}}
             model_scripted.save(export_path)
 
             with open(os.path.join(jit_path, f"nanodet_{self.cfg.check_point_name}.json"),
