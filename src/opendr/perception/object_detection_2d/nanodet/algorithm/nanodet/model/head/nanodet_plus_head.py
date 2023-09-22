@@ -25,6 +25,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.
 
 
 class NanoDetPlusHead(nn.Module):
+    dynamic = False  # force grid reconstruction
     """Detection head used in NanoDet-Plus.
 
     Args:
@@ -136,6 +137,7 @@ class NanoDetPlusHead(nn.Module):
                     activation=self.activation,
                 )
             )
+        cls_convs = nn.Sequential(*cls_convs)
         return cls_convs
 
     def init_weights(self):
@@ -153,13 +155,29 @@ class NanoDetPlusHead(nn.Module):
         if self.fork:
             return self.forward_fork(feats)
         outputs = []
-        for idx, (cls_convs, gfl_cls) in enumerate(zip(self.cls_convs, self.gfl_cls)):
-            feat = feats[idx]
-            for conv in cls_convs:
-                feat = conv(feat)
+        for idx, (feat, cls_convs, gfl_cls, stride) in enumerate(zip(feats, self.cls_convs, self.gfl_cls, self.strides)):
+            feat = cls_convs(feat)
             output = gfl_cls(feat)
-            outputs.append(output.flatten(start_dim=2))
-        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
+
+            bs, _, ny, nx = output.shape
+            output = output.flatten(start_dim=2).permute(0, 2, 1).contiguous()
+            cls, reg = output.split(
+                [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
+            )
+            project = self.distribution_project(reg)
+            if self.dynamic or self._buffers[f"center_priors_{idx}"].shape != project.shape:
+                self._buffers[f"center_priors_{idx}"] = (
+                    self.get_single_level_center_priors(
+                        bs, (ny, nx), stride, dtype=project.dtype, device=project.device
+                    )
+                )
+            dis_preds = project * self._buffers[f"center_priors_{idx}"][..., 2, None]
+            decoded_bboxes = distance2bbox(self._buffers[f"center_priors_{idx}"][..., :2], dis_preds)
+            output = torch.cat((cls.sigmoid(), reg, decoded_bboxes), dim=2)
+            outputs.append(output)
+            # outputs.append(output.flatten(start_dim=2))
+
+        # outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
         return outputs
 
     @torch.jit.unused
@@ -406,11 +424,35 @@ class NanoDetPlusHead(nn.Module):
             # tensors exclusively for better optimization during scripting.
             return self._eval_post_process(preds, meta)
 
-        cls_scores, bbox_preds = preds.split(
-            [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
+        cls_scores, bbox_preds, bboxes = preds.split(
+            [self.num_classes, 4 * (self.reg_max + 1), 2], dim=-1
         )
-        results = self.get_bboxes(cls_scores, bbox_preds, meta["img"], conf_threshold=conf_thresh,
-                                  iou_threshold=iou_thresh, nms_max_num=nms_max_num)
+
+
+        # bboxes = distance2bbox(center_priors[..., :2], dis_preds, max_shape=input_shape)
+        # add a dummy background class at the end of all labels
+        # if torch.jit.is_scripting() or mode == "infer":
+        #     # for faster inference and jit scripting in most common cases we do not try to go through for statement
+        #     score, bbox = cls_scores[0], bboxes[0]
+        #     padding = score.new_zeros(score.shape[0], 1)
+        #     score = torch.cat([score, padding], dim=1)
+        #
+        #     return multiclass_nms(bbox, score, score_thr=conf_thresh, nms_cfg=dict(iou_threshold=iou_thresh),
+        #                           max_num=nms_max_num)
+
+        results = []
+        for i in range(cls_scores.shape[0]):
+            # add a dummy background class at the end of all labels
+            # same with mmdetection2.0
+            score, bbox = cls_scores[i], bboxes[i]
+            padding = score.new_zeros(score.shape[0], 1)
+            score = torch.cat([score, padding], dim=1)
+
+            results.append(
+                multiclass_nms(
+                    bbox, score, score_thr=conf_thresh, nms_cfg=dict(iou_threshold=iou_thresh), max_num=nms_max_num)
+            )
+
         (det_bboxes, det_labels) = results
 
         det_result = []

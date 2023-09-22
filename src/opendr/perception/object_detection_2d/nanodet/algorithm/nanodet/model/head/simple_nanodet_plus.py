@@ -183,35 +183,6 @@ class SimplifierNanoDetPlusHead(nn.Module):
             y.append(x if layer.i in self.out_stages else None)
         return torch.permute(x, (0, 2, 1))
 
-    def init_head(self, preds, gt_meta):
-        batch_size = preds.shape[0]
-        device = preds.device
-        input_height, input_width = gt_meta["img"].shape[2:]
-        featmap_sizes = [
-            (math.ceil(input_height / stride), math.ceil(input_width / stride))
-            for stride in self.strides
-        ]
-        # get grid cells of one image
-        self.mlvl_center_priors = [
-            self.get_single_level_center_priors(
-                batch_size,
-                featmap_sizes[i],
-                stride,
-                dtype=torch.float32,
-                device=device,
-            )
-            for i, stride in enumerate(self.strides)
-        ]
-        self.center_priors = torch.cat(self.mlvl_center_priors, dim=1)
-        center_priors[..., :2]
-
-    def add_to_forward(self):
-        cls_preds, reg_preds = preds.split(
-            [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
-        )
-        dis_preds = self.distribution_project(reg_preds) * center_priors[..., 2, None]
-        decoded_bboxes = distance2bbox(center_priors[..., :2], dis_preds)
-
     def loss(self, preds, gt_meta, aux_preds=None):
         """Compute losses.
         Args:
