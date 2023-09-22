@@ -75,6 +75,9 @@ class OneStageDetector(nn.Module):
             preds = self(img)
         return preds
 
+    def warm_up(self, img):
+        return self.inference(img)
+
     def forward_train(self, gt_meta):
         preds = self(gt_meta["img"])
         loss, loss_states = self.head.loss(preds, gt_meta)

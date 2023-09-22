@@ -122,8 +122,10 @@ class NanodetLearner(Learner):
         self.logger = None
         self.task = None
 
+        #warmup run
+        _ = self.model(self.__dummy_input()[0])
+
         if model_log_name is not None:
-            self.model = self.model.to("cpu")
             # if os.path.exists(f'./models/{model_log_name}'):
             #     import shutil
             #     shutil.rmtree(f'./models/{model_log_name}')
@@ -415,7 +417,11 @@ class NanodetLearner(Learner):
         return dummy_input
 
     def __cv_dumy_input(self, hf=False):
-        width, height = self.cfg.data.bench_test.input_size
+        try:
+            width, height = self.cfg.data.bench_test.input_size
+        except AttributeError as e:
+            self.info(f"{e}, not bench_est.input_size int yaml file, val will be used instead")
+            width, height = self.cfg.data.val.input_size
         return torch.empty((width, height, 3), device="cpu", dtype=torch.half if hf else torch.float32).numpy()
 
     def _save_onnx(self, onnx_path, predictor, do_constant_folding=False, verbose=True, dynamic=True):
