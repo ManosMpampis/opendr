@@ -21,6 +21,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.t
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.simpleGost_1 import SimpleGPAN_1
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.simpleGost_2 import SimpleGPAN_2
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.simpleGost import SimpleGPAN
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn.yoloPan import YoloPan
 
 
 def build_fpn(cfg):
@@ -40,5 +41,7 @@ def build_fpn(cfg):
         return SimpleGPAN_1(**fpn_cfg)
     elif name == "SimpleGPAN_2":
         return SimpleGPAN_2(**fpn_cfg)
+    elif name == "Yolo":
+        return YoloPan(**fpn_cfg)
     else:
         raise NotImplementedError

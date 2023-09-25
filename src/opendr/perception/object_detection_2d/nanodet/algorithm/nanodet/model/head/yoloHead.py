@@ -3,7 +3,7 @@
 YOLO-specific modules
 
 Usage:
-    $ python models/yolo.py --cfg yolov5s.yaml
+    $ python models/yoloHead.py --cfg yolov5s.yaml
 """
 import math
 import torch
@@ -13,14 +13,36 @@ from typing import List, Tuple, Dict
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss import YoloLoss
 
 
+class Wm:
+    def __init__(self, width_multiplier=0.5):
+        self.width_multiplier = width_multiplier
+
+    def __call__(self, width):
+        return int(width * self.width_multiplier)
+
+
 class YoloHead(nn.Module):
     # YOLOv5 Detect head for detection models
     stride = None  # strides computed during build
     dynamic = False  # force grid reconstruction
     export = False  # export mode
+    YoloArch = dict(
+        x=dict(width_multiple=1.25, depth_multiple=1.33),
+        l=dict(width_multiple=1.0, depth_multiple=1.0),
+        m=dict(width_multiple=0.75, depth_multiple=0.67),
+        s=dict(width_multiple=0.5, depth_multiple=0.33),
+        n=dict(width_multiple=0.25, depth_multiple=0.33),
+    )
 
-    def __init__(self, num_classes, loss, input_channels, anchors, inplace=True):  # detection layer
+    def __init__(self, num_classes, loss, arch, anchors, inplace=True, imgsz=640):  # detection layer
         super().__init__()
+        width_multiple = self.YoloArch[arch]["width_multiple"]
+        depth_multiple = self.YoloArch[arch]["depth_multiple"]
+        wm = Wm(width_multiple)
+        input_channels = [wm(256), wm(512), wm(1024)]
+        if isinstance(anchors, int):
+            anchors = [list(range(anchors * 2))] * len(input_channels)
+
         self.nc = num_classes  # number of classes
         self.no = num_classes + 5  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
@@ -32,14 +54,15 @@ class YoloHead(nn.Module):
         self.inplace = inplace  # use inplace ops (e.g. slice assignment)
 
         self.loss_cfg = loss
+
         hyperparameters = {
             "cls_pw": self.loss_cfg.cls_pw,
             "obj_pw": self.loss_cfg.obj_pw,
             "label_smoothing": self.loss_cfg.get('label_smoothing', 0.0),
             "fl_gamma": self.loss_cfg.fl_gamma,
-            "box": self.loss_cfg.box,
-            "obj": self.loss_cfg.obj,
-            "cls": self.loss_cfg.cls,
+            "box": self.loss_cfg.box * (3/self.nl),
+            "obj": self.loss_cfg.obj * ((imgsz / 640) ** 2 * 3 / self.nl),
+            "cls": self.loss_cfg.cls * ((self.nc / 80) * (3 / self.nl)),
         }
         autobalance = ...
         self.loss_fn = YoloLoss("cuda", hyperparameters, self, autobalance)
@@ -52,6 +75,26 @@ class YoloHead(nn.Module):
             bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
             x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
         return x
+
+    def graph_forward(self, x):
+        z = []  # inference output
+        for i in range(self.nl):
+            x[i] = self.m[i](x[i])  # conv
+            bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
+            x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
+
+            if not self.training:  # inference
+                if self.dynamic or self.grid[i].shape[2:4] != x[i].shape[2:4]:
+                    self.grid[i], self.anchor_grid[i] = self._make_grid(nx, ny, i)
+
+                else:  # Detect (boxes only)
+                    xy, wh, conf = x[i].sigmoid().split((2, 2, self.nc + 1), 4)
+                    xy = (xy * 2 + self.grid[i]) * self.stride[i]  # xy
+                    wh = (wh * 2) ** 2 * self.anchor_grid[i]  # wh
+                    y = torch.cat((xy, wh, conf), 4)
+                z.append(y.view(bs, self.na * nx * ny, self.no))
+
+        return (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
 
     def build_strides_anchors(self):
         s = 256  # 2x min stride
@@ -79,21 +122,6 @@ class YoloHead(nn.Module):
             print(f'AutoAnchor: Reversing anchor order')
             self.anchors[:] = self.anchors.flip(0)
 
-    def transalte_output(self, x):
-        z = []  # inference output
-        for i in range(self.nl):
-            bs, _, ny, nx = x[i].shape[:4]
-            if self.dynamic or self.grid[i].shape[2:4] != x[i].shape[2:4]:
-                self.grid[i], self.anchor_grid[i] = self._make_grid(nx, ny, i)
-
-            xy, wh, conf = x[i].sigmoid().split((2, 2, self.nc + 1), 4)
-            xy = (xy * 2 + self.grid[i]) * self.stride[i]  # xy
-            wh = (wh * 2) ** 2 * self.anchor_grid[i]  # wh
-            y = torch.cat((xy, wh, conf), 4)
-            z.append(y.view(bs, self.na * nx * ny, self.no))
-
-        return torch.cat(z, 1), x
-
     def _make_grid(self, nx=20, ny=20, i=0):
         d = self.anchors[i].device
         t = self.anchors[i].dtype
@@ -108,6 +136,8 @@ class YoloHead(nn.Module):
         return grid, anchor_grid
 
     def loss(self, preds, gt_meta):
+        # loss, loss_items = compute_loss(pred, targets.to(device))
+
         loss, loss_items = self.loss_fn(preds, )
 
         loss = ...

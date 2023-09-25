@@ -60,6 +60,16 @@ class OneStageDetector(nn.Module):
             self.fpn = build_fpn(fpn_cfg)
         if head_cfg is not None:
             self.head = build_head(head_cfg)
+
+            if head_cfg.name == "Yolo":
+                s = 256  # 2x min stride
+                self.head.inplace = head_cfg.inplace
+                self.head.stride = torch.tensor([s / x.shape[-2] for x in self(torch.zeros(1, 3, s, s))])  # forward
+                self.head.check_anchor_order()
+                self.head.anchors /= self.head.stride.view(-1, 1, 1)
+                self.stride = self.head.stride
+                self.head._initialize_biases()  # only run once
+
         self.epoch = 0
 
     def forward(self, x):

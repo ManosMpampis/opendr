@@ -61,6 +61,17 @@ class NanoDetPlus(OneStageDetector):
         )
         self.aux_fpn = copy.deepcopy(self.fpn)
         self.aux_head = build_head(aux_head)
+
+        if aux_head.name == "Yolo":
+            s = 256  # 2x min stride
+            self.aux_head.inplace = aux_head.inplace
+            self.aux_head.stride = torch.tensor([s / x.shape[-2] for x in self(torch.zeros(1, 3, s, s))])  # forward
+            self.aux_head.check_anchor_order()
+            self.aux_head.anchors /= self.aux_head.stride.view(-1, 1, 1)
+            self.stride = self.aux_head.stride
+            self.aux_head._initialize_biases()  # only run once
+
+
         self.detach_epoch = detach_epoch
 
     def forward_train(self, gt_meta):

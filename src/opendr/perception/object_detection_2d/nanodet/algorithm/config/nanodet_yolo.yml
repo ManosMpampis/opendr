@@ -6,42 +6,28 @@ model:
     name: ExpMovingAverager
     decay: 0.9998
   arch:
-    name: NanoDetPlus
-    detach_epoch: 10
+    name: OneStageDetector
     backbone:
-      name: Vgg
-      out_stages:       [4, 6, 10]
-      stages_outplanes: [32, 64, 64, 128, 128, 256, 256, 512, 512, 512, 512]
-      stages_kernels:   [3,  3,  3,  3,   3,   3,   3,   3,   3,   3,   3]
-      stages_strides:   [2,  2,  1,  2,   1,   2,   1,   2,   1,   1,   1]
-      stages_padding:   [1,  1,  1,  1,   1,   1,   1,   1,   1,   1,   1]
-      maxpool_after:    [0,  0,  0,  0,   0,   0,   0,   0,   0,   0,   0]
-      maxpool_stride: 1
+      name: Yolo
+      arch: s
       activation: LeakyReLU
-      use_depthwise: False
-      quant: False
-      pretrain: False
     fpn:
-      name: SimpleGPAN
-      in_channels: [128, 256, 512]
-      out_channels: 256
-      use_depthwise: False
-      kernel_size: 5
-      num_blocks: 1
+      name: Yolo
+      arch: s
+      kernel_size: 3
       upsample_cfg:
         scale_factor: 2
-        mode: bilinear
+        mode: nearess
       activation: LeakyReLU
-      quant: False
     head:
-      name: YoloHead
+      name: Yolo
       num_classes: 1
-      input_channels: [256, 256, 256]
+      arch: s
       anchors:
         - [ 10,13, 16,30, 33,23 ]  # P3/8
         - [ 30,61, 62,45, 59,119 ]  # P4/16
         - [ 116,90, 156,198, 373,326 ]  # P5/32
-
+      imgsz: 192
       inplace: True
       loss:
         cls_pw: 1.0  # cls BCELoss positive_weight
@@ -51,16 +37,6 @@ model:
         box: 0.05  # box loss gain
         obj: 0.7  # obj loss gain (scale with pixels)
         cls: 0.3  # cls loss gain
-    # Auxiliary head, only use in training time.
-    aux_head:
-      name: SimpleConvHead
-      num_classes: 1
-      input_channel: 64
-      feat_channels: 64
-      stacked_convs: 4
-      strides: [8, 16, 32]
-      activation: LeakyReLU
-      reg_max: 7
 data:
   train:
     input_size: [192, 192] #[w,h]

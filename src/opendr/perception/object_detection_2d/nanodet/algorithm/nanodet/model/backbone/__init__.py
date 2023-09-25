@@ -32,6 +32,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backb
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_resnet import ResNetSmall
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.small_shufflenetv2 import ShuffleNetV2Small
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.vgg import Vgg
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.backbone.yolobb import Yolo
 
 
 def build_backbone(cfg):
@@ -69,5 +70,7 @@ def build_backbone(cfg):
         return SimpleCnn_2(**backbone_cfg)
     elif name == "SimpleCnn_3":
         return VggBackbone(**backbone_cfg)
+    elif name == "Yolo":
+        return Yolo(**backbone_cfg)
     else:
         raise NotImplementedError
