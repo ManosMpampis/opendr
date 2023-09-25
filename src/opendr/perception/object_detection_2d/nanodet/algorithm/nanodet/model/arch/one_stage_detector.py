@@ -88,6 +88,17 @@ class OneStageDetector(nn.Module):
     def warm_up(self, img):
         return self.inference(img)
 
+    def set_dynamic(self, dynamic=False):
+        self.backbone.dynamic = dynamic
+        if hasattr(self, "fpn"):
+            self.fpn.dynamic = dynamic
+        if hasattr(self, "head"):
+            self.head.dynamic = dynamic
+        if hasattr(self, "aux_fpn"):
+            self.aux_fpn.dynamic = dynamic
+        if hasattr(self, "aux_head"):
+            self.aux_head.dynamic = dynamic
+
     def forward_train(self, gt_meta):
         preds = self(gt_meta["img"])
         loss, loss_states = self.head.loss(preds, gt_meta)

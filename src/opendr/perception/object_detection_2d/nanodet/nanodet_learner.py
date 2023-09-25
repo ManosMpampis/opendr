@@ -532,7 +532,7 @@ class NanodetLearner(Learner):
             assert not predictor.hf, '--hf not compatible with --dynamic, i.e. use either --hf or --dynamic but not both'
             profile = builder.create_optimization_profile()
             for inp in inputs:
-                profile.set_shape(inp.name, (1, im.shape[1], 10, 10), im.shape, im.shape)
+                profile.set_shape(inp.name, (1, im.shape[1], 320, 320), im.shape, im.shape)
             config.add_optimization_profile(profile)
 
         if predictor.hf or int:
@@ -657,7 +657,9 @@ class NanodetLearner(Learner):
         optimization = optimization.lower()
         if not os.path.exists(export_path) or new_load:
             predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
-                                  iou_thresh=iou_threshold, nms_max_num=nms_max_num, hf=hf)
+                                  iou_thresh=iou_threshold, nms_max_num=nms_max_num, hf=hf, dynamic=dynamic)
+            # warmup run
+            _ = predictor(self.__dummy_input(hf=hf, ch_l=self.cfg.model.arch.ch_l)[0])
             if optimization == "trt":
                 self._save_trt(export_path, verbose=verbose, predictor=predictor, dynamic=dynamic, calib_dataset=calib_dataset,
                                calib_cache=calib_cache, calib_num_images=calib_num_images, calib_batch_size=calib_batch_size, int=int)

@@ -23,7 +23,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch 
 
 
 class Predictor(nn.Module):
-    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, hf=False):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, hf=False, dynamic=False):
         super(Predictor, self).__init__()
         self.cfg = cfg
         self.device = device
@@ -33,6 +33,7 @@ class Predictor(nn.Module):
         self.hf = hf
         self.fuse = self.cfg.model.arch.fuse
         self.ch_l = self.cfg.model.arch.ch_l
+        self.dynamic = dynamic
         self.traced_model = None
         if self.cfg.model.arch.backbone.name == "RepVGG":
             deploy_config = self.cfg.model
@@ -51,6 +52,7 @@ class Predictor(nn.Module):
             model = model.to(memory_format=torch.channels_last)
         if self.hf:
             model = model.half()
+        model.set_dynamic(self.dynamic)
 
         self.model = model.to(device).eval()
 
