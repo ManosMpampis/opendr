@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     nanodet = NanodetLearner(model_to_use=args.model, iters=args.n_epochs, lr=args.lr, batch_size=args.batch_size,
                              checkpoint_after_iter=args.checkpoint_freq, checkpoint_load_iter=args.resume_from,
-                             device="cuda", model_log_name=f"{args.model}", warmup_steps=args.warmup_steps)
+                             device=args.device, model_log_name=f"{args.model}", warmup_steps=args.warmup_steps)
 
     nanodet.fit(dataset, val_dataset, logging=True, profile=False, verbose=False)
     nanodet.save(f"./saved/nanodet_{args.model}")

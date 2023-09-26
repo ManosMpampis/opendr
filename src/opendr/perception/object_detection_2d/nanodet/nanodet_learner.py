@@ -656,6 +656,9 @@ class NanodetLearner(Learner):
         if int:
             assert hf, "if INT8 is enabled hf must be enabled as well!!!"
 
+        self.cfg.defrost()
+        self.cfg.model.arch.ch_l = self.cfg.model.arch.ch_l and (optimization in ["jit"])
+        self.cfg.freeze()
         optimization = optimization.lower()
         if not os.path.exists(export_path) or new_load:
             predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
@@ -780,7 +783,7 @@ class NanodetLearner(Learner):
 
         self.task = TrainingTask(self.cfg, self.model, evaluator, accumulate=accumulate)
 
-        if cfg.device.gpu_ids == -1:
+        if cfg.device.gpu_ids == -1 or self.device == "cpu":
             accelerator, devices, strategy, precision = ("cpu", None, None, cfg.device.precision)
         else:
             accelerator, devices, strategy, precision = ("gpu", cfg.device.gpu_ids, None, cfg.device.precision)
