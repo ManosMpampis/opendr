@@ -6,7 +6,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss.
 
 
 @weighted_loss
-def quality_focal_loss(pred, target, beta=2.0, cost_function=None):
+def quality_focal_loss(pred, target, beta=2.0, cost_function=None, use_sigmoid=True):
     r"""Quality Focal Loss (QFL) is from `Generalized Focal Loss: Learning
     Qualified and Distributed Bounding Boxes for Dense Object Detection
     <https://arxiv.org/abs/2006.04388>`_.
@@ -34,14 +34,19 @@ def quality_focal_loss(pred, target, beta=2.0, cost_function=None):
     label, score = target
 
     # negatives are supervised by 0 quality score
-    pred_sigmoid = pred.sigmoid()
+    pred_sigmoid = pred.sigmoid() if use_sigmoid else pred
     scale_factor = pred_sigmoid
     zerolabel = scale_factor.new_zeros(pred.shape)
 
     if (cost_function is None) or (cost_function == "Cross"):
-        loss = F.binary_cross_entropy_with_logits(
-            pred, zerolabel, reduction="none"
-        ) * scale_factor.pow(beta)
+        if use_sigmoid:
+            loss = F.binary_cross_entropy_with_logits(
+                pred, zerolabel, reduction="none"
+            ) * scale_factor.pow(beta)
+        else:
+            loss = F.binary_cross_entropy(
+                pred, zerolabel, reduction="none"
+            ) * scale_factor.pow(beta)
     elif cost_function == "Hinge":
         loss = F.hinge_embedding_loss(
             pred_sigmoid, zerolabel, reduction="none"
@@ -56,9 +61,14 @@ def quality_focal_loss(pred, target, beta=2.0, cost_function=None):
     # positives are supervised by bbox quality (IoU) score
     scale_factor = score[pos] - pred_sigmoid[pos, pos_label]
     if (cost_function is None) or (cost_function == "Cross"):
-        loss[pos, pos_label] = F.binary_cross_entropy_with_logits(
-            pred[pos, pos_label], score[pos], reduction="none"
-        ) * scale_factor.abs().pow(beta)
+        if use_sigmoid:
+            loss[pos, pos_label] = F.binary_cross_entropy_with_logits(
+                pred[pos, pos_label], score[pos], reduction="none"
+            ) * scale_factor.abs().pow(beta)
+        else:
+            loss[pos, pos_label] = F.binary_cross_entropy(
+                pred[pos, pos_label], score[pos], reduction="none"
+            ) * scale_factor.abs().pow(beta)
     elif cost_function == "Hinge":
         loss[pos, pos_label] = F.hinge_embedding_loss(
             pred_sigmoid[pos, pos_label], score[pos], reduction="none"
@@ -108,7 +118,7 @@ class QualityFocalLoss(nn.Module):
 
     def __init__(self, use_sigmoid=True, beta=2.0, reduction="mean", loss_weight=1.0, cost_function=None):
         super(QualityFocalLoss, self).__init__()
-        assert use_sigmoid is True, "Only sigmoid in QFL supported now."
+        # assert use_sigmoid is True, "Only sigmoid in QFL supported now."
         self.use_sigmoid = use_sigmoid
         self.beta = beta
         self.reduction = reduction
@@ -137,18 +147,16 @@ class QualityFocalLoss(nn.Module):
         """
         assert reduction_override in (None, "none", "mean", "sum")
         reduction = reduction_override if reduction_override else self.reduction
-        if self.use_sigmoid:
-            loss_cls = self.loss_weight * quality_focal_loss(
-                pred,
-                target,
-                weight,
-                beta=self.beta,
-                reduction=reduction,
-                avg_factor=avg_factor,
-                cost_function=self.cost_function,
-            )
-        else:
-            raise NotImplementedError
+        loss_cls = self.loss_weight * quality_focal_loss(
+            pred,
+            target,
+            weight,
+            beta=self.beta,
+            reduction=reduction,
+            avg_factor=avg_factor,
+            cost_function=self.cost_function,
+            use_sigmoid=self.use_sigmoid,
+        )
         return loss_cls
 
 
