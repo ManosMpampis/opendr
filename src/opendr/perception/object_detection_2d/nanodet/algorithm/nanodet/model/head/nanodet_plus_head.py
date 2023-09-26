@@ -75,6 +75,8 @@ class NanoDetPlusHead(nn.Module):
         self.reg_max = reg_max
         self.activation = activation
         self.ConvModule = DepthwiseConvModule if use_depthwise else ConvModule
+        for idx in range(len(strides)):
+            self.register_buffer(f"center_priors_{idx}", torch.empty(0))
 
         self.loss_cfg = loss
         self.norm_cfg = norm_cfg #None
