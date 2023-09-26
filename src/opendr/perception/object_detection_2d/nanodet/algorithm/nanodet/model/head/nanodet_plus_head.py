@@ -448,7 +448,7 @@ class NanoDetPlusHead(nn.Module):
                         ),
                         dim=1,
                     )
-                    det_results.append(det.squeeze())
+                    det_results.append(det)
         return det_results
 
     def _eval_post_process(self, preds, meta):

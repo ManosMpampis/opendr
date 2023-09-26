@@ -86,9 +86,8 @@ class Predictor(nn.Module):
         height, width = img.shape[:2]
         meta = dict(id=0, height=height, width=width, raw_img=img, img=img)
         meta = self.pipeline(None, meta, input_size)
-        meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device)
+        meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device, torch.half if self.hf else torch.float32)
 
-        meta["img"] = meta["img"].half() if self.hf else meta["img"]
         meta["img"] = divisible_padding(
             meta["img"],
             divisible=torch.tensor(32, device=self.device, dtype=torch.half if self.hf else torch.float)
@@ -99,12 +98,12 @@ class Predictor(nn.Module):
         _input = _input.to(memory_format=torch.channels_last) if self.ch_l else _input
         _height = torch.as_tensor(height, device=self.device)
         _width = torch.as_tensor(width, device=self.device)
-        _warp_matrix = torch.from_numpy(meta["warp_matrix"]).to(self.device)
+        _warp_matrix = torch.from_numpy(meta["warp_matrix"]).to(self.device)  # inverted matrix do not supported in torch.half
 
         return _input, _height, _width, _warp_matrix
 
     def postprocessing(self, preds, input, height, width, warp_matrix):
-        meta = dict(height=height.unsqueeze(0), width=width.unsqueeze(0), id=torch.zeros(1, 1), warp_matrix=warp_matrix.unsqueeze(0), img=input.unsqueeze(0))
+        meta = dict(height=height.unsqueeze(0), width=width.unsqueeze(0), id=torch.zeros(1, 1), warp_matrix=warp_matrix.unsqueeze(0), img=input)
         res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_threshold, iou_thresh=self.iou_threshold,
                                            nms_max_num=self.nms_max_num)
         return res

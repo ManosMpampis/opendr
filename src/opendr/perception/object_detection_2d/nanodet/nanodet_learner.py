@@ -1051,15 +1051,15 @@ class NanodetLearner(Learner):
             res = self.predictor.postprocessing(preds, _input, *metadata)
 
         bounding_boxes = []
-        for box in res:
-        # for box in label:
-            box = box.to("cpu")
-            bbox = BoundingBox(left=box[0], top=box[1],
-                               width=box[2] - box[0],
-                               height=box[3] - box[1],
-                               name=box[5],
-                               score=box[4])
-            bounding_boxes.append(bbox)
+        for cls in res:
+            for box in cls:
+                box = box.to("cpu")
+                bbox = BoundingBox(left=box[0], top=box[1],
+                                   width=box[2] - box[0],
+                                   height=box[3] - box[1],
+                                   name=box[5],
+                                   score=box[4])
+                bounding_boxes.append(bbox)
         bounding_boxes = BoundingBoxList(bounding_boxes)
         bounding_boxes.data.sort(key=lambda v: v.confidence)
 

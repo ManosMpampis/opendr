@@ -74,7 +74,7 @@ class trt_model():
         self.batch_size = self.bindings['data'].shape[0]  # if dynamic, this is instead max batch size
 
     def __call__(self, input):
-        input = input.to(memory_format=torch.contiguous_format)  # maybe slows down (check)
+        # input = input.to(memory_format=torch.contiguous_format)  # maybe slows down (check)
         if self.dynamic and input.shape != self.bindings['data'].shape:
             i = self.engine.get_binding_index('data')
             self.context.set_binding_shape(i, input.shape)  # reshape if dynamic
