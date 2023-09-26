@@ -92,7 +92,10 @@ class Predictor(nn.Module):
         meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device)
 
         meta["img"] = meta["img"].half() if self.hf else meta["img"]
-        meta["img"] = divisible_padding(meta["img"], divisible=torch.tensor(32))
+        meta["img"] = divisible_padding(
+            meta["img"],
+            divisible=torch.tensor(32, device=self.device, dtype=torch.half if self.hf else torch.float)
+        )
 
         # meta["img"] = meta["img"].to(torch.uint8)
         _input = meta["img"]
