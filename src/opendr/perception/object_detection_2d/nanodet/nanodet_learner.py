@@ -1327,6 +1327,265 @@ class NanodetLearner(Learner):
 
         return
 
+    def benchmark_dataset(self, dataset, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, hf=True, ch_l=False, fuse=True):
+        """
+        Performs inference
+        :param nms_max_num: determines the maximum number of bounding boxes that will be retained following the nms.
+        :type nms_max_num: int
+        """
+
+        import numpy as np
+
+        dummy_input = self.__cv_dumy_input()
+        self.model.float()
+        self.cfg.defrost()
+        self.cfg.model.arch.ch_l = ch_l
+        self.cfg.model.arch.fuse = fuse
+        self.cfg.freeze()
+
+        if not self.predictor:
+            self.predictor = Predictor(self.cfg, self.model, device=self.device, conf_thresh=conf_threshold,
+                                       iou_thresh=iou_threshold, nms_max_num=nms_max_num, hf=hf)
+
+        if self.jit_model:
+            if hf:
+                self.jit_model = self.jit_model.half()
+            try:
+                self.jit_model = torch.jit.optimize_for_inference(self.jit_model)
+            except:
+                print("")
+
+        if self.jit_only_model:
+            if hf:
+                self.jit_only_model = self.jit_only_model.half()
+            try:
+                self.jit_only_model = torch.jit.optimize_for_inference(self.jit_only_model)
+            except:
+                print("")
+
+        if hf:
+            self.predictor.model = self.predictor.model.half()
+
+        def profile(input, function, sing_inputs=True, onnx_fun=False):
+            torch.cuda.synchronize()
+            if onnx_fun:
+                starter = time.perf_counter()
+                output = function(['output'], {'data': input})
+                torch.cuda.synchronize()
+                dt = time.perf_counter() - starter
+                return output, dt
+            if sing_inputs:
+                starter = time.perf_counter()
+                output = function(input)
+                torch.cuda.synchronize()
+                dt = time.perf_counter() - starter
+                return output, dt
+            starter = time.perf_counter()
+            output = function(*input)
+            torch.cuda.synchronize()
+            dt = time.perf_counter() - starter
+            return output, dt
+
+        # Onnx measurements
+        onnx_infer_timings = []
+        if self.ort_session:
+            # warmup
+            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            _input = _input.cpu().numpy()
+            _preds = self.ort_session(['output'], {'data': _input})
+            _out = self.predictor.postprocessing(_preds, _input, *_metadata)
+
+            # bench
+            for data in dataset:
+                (_input, *_metadata), _ = profile(
+                    (data, True), self.predictor.preprocessing,
+                    sing_inputs=False
+                )
+                _preds, onnx_infer_time = profile(_input, self.ort_session, onnx_fun=True)
+                onnx_infer_timings.append(onnx_infer_time)
+        onnx_infer_timings = np.ndarray(onnx_infer_timings)
+
+        # Jit measurements
+        jit_model_infer_timings = []
+        if self.jit_only_model:
+            # warmup
+            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            _preds = self.jit_only_model((_input, *_metadata))
+            _out = self.predictor.postprocessing(_preds, _input, *_metadata)
+            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            _preds = self.jit_only_model((_input, *_metadata))
+            _out = self.predictor.postprocessing(_preds, _input, *_metadata)
+
+            # bench
+            for data in dataset:
+                (_input, *_metadata), _ = profile(
+                    (data, True), self.predictor.preprocessing,
+                    sing_inputs=False
+                )
+                _preds, jit_model_infer_time = profile((_input, *_metadata), self.jit_only_model, sing_inputs=False)
+                jit_model_infer_timings.append(jit_model_infer_time)
+        jit_model_infer_timings = np.ndarray(jit_model_infer_timings)
+
+        # Jit measurements
+        jit_infer_timings = []
+        if self.jit_model:
+            # warmup
+            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            _out = self.jit_model((_input, *_metadata))
+            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            _out = self.jit_model((_input, *_metadata))
+
+            # bench
+            for data in dataset:
+                (_input, *_metadata), _ = profile(
+                    (data, True), self.predictor.preprocessing,
+                    sing_inputs=False
+                )
+                _preds, jit_infer_time = profile((_input, *_metadata), self.jit_model, sing_inputs=False)
+                jit_infer_timings.append(jit_infer_time)
+        jit_infer_timings = np.ndarray(jit_infer_timings)
+
+        # trt measurements
+        trt_infer_timings = []
+        trt_post_timings = []
+        if self.trt_model:
+            # warmup
+            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            _preds = self.trt_model((_input, *_metadata))
+            _out = self.predictor.postprocessing(_preds, _input, *_metadata)
+            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            _preds = self.trt_model((_input, *_metadata))
+            _out = self.predictor.postprocessing(_preds, _input, *_metadata)
+
+            # bench
+            for data in dataset:
+                (_input, *_metadata), _ = profile(
+                    (data, True), self.predictor.preprocessing,
+                    sing_inputs=False
+                )
+                _preds, trt_infer_time = profile(_input, self.trt_model, sing_inputs=True)
+                trt_infer_timings.append(trt_infer_time)
+
+                _out, trt_post_time = profile((_preds, _input, *_metadata), self.jit_postprocessing, sing_inputs=False)
+                trt_post_timings.append(trt_post_time)
+        trt_infer_timings = np.ndarray(trt_infer_timings)
+        trt_post_timings = np.ndarray(trt_post_timings)
+
+
+        # Original Python measurements
+        preprocess_timings = []
+        infer_timings = []
+        post_timings = []
+        (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+        _preds = self.predictor(_input)
+        _out = self.predictor.postprocessing(_preds, _input, *_metadata)
+        for data in dataset:
+            (_input, *_metadata), preprocess_time = profile(
+                (data, True), self.predictor.preprocessing,
+                sing_inputs=False
+            )
+            preprocess_timings.append(preprocess_time)
+
+            _preds, infer_time = profile(_input, self.predictor, sing_inputs=True)
+            infer_timings.append(infer_time)
+
+            # Post-processing measurements
+            _out, post_time = profile((_preds, _input, *_metadata), self.predictor.postprocessing, sing_inputs=False)
+            post_timings.append(post_time)
+
+        # Measure std and mean of times
+        std_preprocess_timings = np.std(preprocess_timings)
+        std_infer_timings = np.std(infer_timings)
+        std_post_timings = np.std(post_timings)
+
+        mean_preprocess_timings = np.mean(preprocess_timings)
+        mean_infer_timings = np.mean(infer_timings)
+        mean_post_timings = np.mean(post_timings)
+
+        if self.jit_model:
+            mean_jit_infer_timings = np.mean(jit_infer_timings)
+            if self.jit_only_model:
+                mean_jit_model_infer_timings = np.mean(jit_model_infer_timings)
+                mean_jit_preprocessing_timings = mean_jit_infer_timings - mean_jit_model_infer_timings
+        elif self.jit_only_model:
+            mean_jit_model_infer_timings = np.mean(jit_model_infer_timings)
+        if self.trt_model:
+            mean_trt_infer_timings = np.mean(trt_infer_timings)
+            mean_trt_post_timings = np.mean(trt_post_timings)
+        if self.ort_session:
+            mean_onnx_infer_timings = np.mean(onnx_infer_timings)
+
+        # mean times to fps, torch measures in milliseconds
+        fps_preprocess_timings = 1/mean_preprocess_timings
+        fps_infer_timings = 1/mean_infer_timings
+        fps_post_timings = 1/mean_post_timings
+
+        if self.jit_only_model:
+            fps_jit_model_infer_timings = 1/mean_jit_model_infer_timings
+        if self.jit_model:
+            fps_jit_infer_timings = 1/mean_jit_infer_timings
+        if self.jit_model and self.jit_only_model:
+            fps_jit_postprocessing_timings = 1/mean_jit_preprocessing_timings
+
+        if self.trt_model:
+            fps_trt_infer_timings = 1 / mean_trt_infer_timings
+            fps_trt_postprocessing_timings = 1 / mean_trt_post_timings
+        if self.ort_session:
+            fps_onnx_infer_timings = 1/mean_onnx_infer_timings
+            fps_onnx_infer_post_timings = 1/(mean_onnx_infer_timings + mean_post_timings)
+
+        # Print measurements
+        print(f"\n\nMeasure of model: {self.cfg.check_point_name} \nHalf precision: {hf}\nFuse Convs: {fuse}\nChannel last: {ch_l}")
+        print(f"\n=== Python measurements === \n"
+              f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
+              f"infer          fps = {fps_infer_timings} evn/s\n"#)
+              f"postprocessing fps = {fps_post_timings} evn/s\n")
+        if self.jit_model:
+            print(f"\n\n=== JIT measurements === \n"
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s")
+            if self.jit_only_model:
+                print(f"infer          fps = {fps_jit_model_infer_timings} evn/s")
+                print(f"postprocessing fps = {fps_jit_postprocessing_timings} evn/s")
+            print(f"infer + postpr fps = {fps_jit_infer_timings} evn/s")
+
+        if self.trt_model:
+            print(f"\n\n=== TRT measurements === \n"
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s")
+            print(f"infer          fps = {fps_trt_infer_timings} evn/s\n"
+                  f"postprocessing fps = {fps_trt_postprocessing_timings} evn/s")
+
+        if self.ort_session:
+            print(f"\n\n=== ONNX measurements === \n"
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
+                  f"infer          fps = {fps_onnx_infer_timings} evn/s\n"
+                  f"postprocessing fps = {fps_post_timings} evn/s\n"
+                  f"infer + postpr fps = {fps_onnx_infer_post_timings} evn/s")
+
+        print(f"\n\n++++++ STD OF TIMES ++++++")
+        print(f"std pre: {std_preprocess_timings}")
+        print(f"std infer: {std_infer_timings}")
+        print(f"std post: {std_post_timings}")
+
+        if self.jit_only_model:
+            std_jit_2_infer_timings = np.std(jit_model_infer_timings)
+            print(f"std JIT infer: {std_jit_2_infer_timings}")
+
+        if self.jit_model:
+            std_jit_infer_timings = np.std(jit_infer_timings)
+            print(f"std JIT infer+post: {std_jit_infer_timings}")
+
+        if self.trt_model:
+            std_trt_infer_timings = np.std(trt_infer_timings)
+            std_trt_post_timings = np.std(trt_post_timings)
+            print(f"std trt infer: {std_trt_infer_timings}\n"
+                  f"std trt post : {std_trt_post_timings}")
+
+        if self.ort_session:
+            std_onnx_infer_timings = np.std(onnx_infer_timings)
+            print(f"std ONNX infer: {std_onnx_infer_timings}")
+
+        return
+
     def info(self, msg, verbose=True):
         if self.logger and verbose:
             self.logger.info(msg)
