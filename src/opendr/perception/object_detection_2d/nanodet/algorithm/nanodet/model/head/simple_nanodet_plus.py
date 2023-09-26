@@ -228,7 +228,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
                 [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
             )
             aux_dis_preds = (
-                self.distribution_project(aux_reg_preds) * center_priors[..., 2, None]
+                    self.distribution_project(aux_reg_preds) * center_priors[..., 2, None]
             )
             aux_decoded_bboxes = distance2bbox(center_priors[..., :2], aux_dis_preds)
             batch_assign_res = multi_apply(
@@ -312,7 +312,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
 
     @torch.no_grad()
     def target_assign_single_img(
-        self, cls_preds, center_priors, decoded_bboxes, gt_bboxes, gt_labels
+            self, cls_preds, center_priors, decoded_bboxes, gt_bboxes, gt_labels
     ):
         """Compute classification, regression, and objectness targets for
         priors in a single image.
@@ -415,7 +415,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
         cls_scores, bbox_preds = preds.split(
             [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
         )
-        results = self.get_bboxes(cls_scores, bbox_preds, meta["img"], conf_threshold=conf_thresh,
+        results = self.get_bboxes(cls_scores, bbox_preds, meta["img"][0], conf_threshold=conf_thresh,
                                   iou_threshold=iou_thresh, nms_max_num=nms_max_num)
         (det_bboxes, det_labels) = results
 
@@ -427,7 +427,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
             class_det_bboxes = det_bboxes[inds]
             class_det_bboxes[:, :4] = scriptable_warp_boxes(
                 class_det_bboxes[:, :4],
-                torch.linalg.inv(meta["warp_matrix"]), meta["width"], meta["height"]
+                torch.linalg.inv(meta["warp_matrix"][0]), meta["width"][0], meta["height"][0]
             )
             if class_det_bboxes.shape[0] != 0:
                 det = torch.cat((
@@ -444,11 +444,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
         )
         result_list = self.get_bboxes(cls_scores, bbox_preds, meta["img"], mode="eval")
         det_results = {}
-        warp_matrixes = (
-            meta["warp_matrix"]
-            if isinstance(meta["warp_matrix"], list)
-            else meta["warp_matrix"]
-        )
+        warp_matrixes = meta["warp_matrix"]
         img_heights = (
             meta["height"].cpu().numpy()
             if isinstance(meta["height"], torch.Tensor)
@@ -503,7 +499,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
         """
         device = cls_preds.device
         b = cls_preds.shape[0]
-        input_height, input_width = input_img.shape[2:]
+        input_height, input_width = input_img.shape[-2:]
         input_shape = (input_height, input_width)
 
         featmap_sizes = [
@@ -533,7 +529,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
                                   max_num=nms_max_num)
 
         result_list = []
-        for i in range(b):
+        for i in range(cls_preds.shape[0]):
             # add a dummy background class at the end of all labels
             # same with mmdetection2.0
             score, bbox = cls_preds[i], bboxes[i]
