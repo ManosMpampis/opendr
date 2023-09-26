@@ -405,14 +405,14 @@ class NanodetLearner(Learner):
             width, height = self.cfg.data.val.input_size
         dummy_img = divisible_padding(
             torch.empty((3, height, width), device=self.device, dtype=torch.half if hf else torch.float32),
-            divisible=torch.tensor(32)
+            divisible=torch.tensor(32, device=self.device, dtype=torch.half if hf else torch.float32)
         )
         dummy_img = dummy_img.contiguous(memory_format=torch.channels_last) if ch_l else dummy_img
         dummy_input = (
             dummy_img,
-            torch.tensor(width, device="cpu", dtype=torch.int64),
-            torch.tensor(height, device="cpu", dtype=torch.int64),
-            torch.eye(3, device="cpu", dtype=torch.half if hf else torch.float32),
+            torch.tensor(width, device=self.device, dtype=torch.int64),
+            torch.tensor(height, device=self.device, dtype=torch.int64),
+            torch.eye(3, device=self.device, dtype=torch.half if hf else torch.float32),
         )
         return dummy_input
 
@@ -1065,7 +1065,7 @@ class NanodetLearner(Learner):
 
         return bounding_boxes
 
-    def benchmark(self, repetitions=1000, warmup=100, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, hf=False, ch_l=False, fuse=False):
+    def benchmark(self, repetitions=1000, warmup=100, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, hf=False, ch_l=False, fuse=False, dataset=None):
         """
         Performs inference
         :param repetitions: input image to perform inference on
@@ -1075,7 +1075,15 @@ class NanodetLearner(Learner):
         :param nms_max_num: determines the maximum number of bounding boxes that will be retained following the nms.
         :type nms_max_num: int
         """
-
+        if dataset:
+            self.benchmark_dataset(
+                dataset,
+                conf_threshold=conf_threshold,
+                iou_threshold=iou_threshold,
+                nms_max_num=nms_max_num,
+                hf=hf, ch_l=ch_l, fuse=fuse,
+            )
+            return
         import numpy as np
 
         dummy_input = self.__cv_dumy_input()
@@ -1102,7 +1110,8 @@ class NanodetLearner(Learner):
                     starter = time.perf_counter()
                     output = function(['output'], {'data': input})
                     torch.cuda.synchronize()
-                    timings[run] = time.perf_counter() - starter
+                    dt = time.perf_counter() - starter
+                    timings[run] = dt
                 return output, timings
             if sing_inputs:
                 for run in range(warmup):
@@ -1112,7 +1121,8 @@ class NanodetLearner(Learner):
                     starter = time.perf_counter()
                     output = function(input)
                     torch.cuda.synchronize()
-                    timings[run] = time.perf_counter() - starter
+                    dt = time.perf_counter() - starter
+                    timings[run] = dt
                 return output, timings
             for run in range(warmup):
                 output = function(*input)
@@ -1121,8 +1131,8 @@ class NanodetLearner(Learner):
                 starter = time.perf_counter()
                 output = function(*input)
                 torch.cuda.synchronize()
-                timings[run] = time.perf_counter() - starter
-            torch.cuda.empty_cache()
+                dt = time.perf_counter() - starter
+                timings[run] = dt
             return output, timings
 
         def bench_loop2(input, metadatab, function1, function2, repetitions, warmup, onnx_fun=False):
@@ -1139,7 +1149,8 @@ class NanodetLearner(Learner):
                     output1 = function1(['output'], {'data': input})
                     output2 = function2(torch.from_numpy(output1[0]), input, *metadatab)
                     torch.cuda.synchronize()
-                    timings[run] = time.perf_counter() - starter
+                    dt = time.perf_counter() - starter
+                    timings[run] = dt
                 return output2, timings
             for run in range(warmup):
                 output1 = function1(input)
@@ -1150,8 +1161,8 @@ class NanodetLearner(Learner):
                 output1 = function1(input)
                 output2 = function2(output1, input, *metadatab)
                 torch.cuda.synchronize()
-                timings[run] = time.perf_counter() - starter
-            torch.cuda.empty_cache()
+                dt = time.perf_counter() - starter
+                timings[run] = dt
             return output2, timings
 
         # Preprocess measurement
@@ -1162,7 +1173,7 @@ class NanodetLearner(Learner):
         if self.ort_session:
             # Inference
             preds, onnx_infer_timings = bench_loop(dummy_input, self.ort_session, repetitions, warmup,
-                                                   sing_inputs=True, onnx_fun=True)
+                                                   sing_inputs=False, onnx_fun=True)
 
         # Jit measurements
         jit_2_infer_timings = None
@@ -1193,13 +1204,11 @@ class NanodetLearner(Learner):
         trt_post_timings = None
         trt_infer_post_timings = None
         if self.trt_model:
-            preds_trt, trt_infer_timings = bench_loop(_input.to(torch.float32).to(self.device), self.trt_model,
-                                                      repetitions, warmup, sing_inputs=True)
-            post_out_trt, trt_post_timings = bench_loop((preds_trt.half(), _input, *metadata), self.jit_postprocessing,
+            preds_trt, trt_infer_timings = bench_loop(_input, self.trt_model, repetitions, warmup, sing_inputs=True)
+            post_out_trt, trt_post_timings = bench_loop((preds_trt, _input, *metadata), self.jit_postprocessing,
                                                         repetitions, warmup, sing_inputs=False)
 
-            post_out_trt, trt_infer_post_timings = bench_loop2(_input.to(torch.float32).to(self.device),
-                                                               metadatab=metadata, function1=self.trt_model,
+            post_out_trt, trt_infer_post_timings = bench_loop2(_input, metadatab=metadata, function1=self.trt_model,
                                                                function2=self.jit_postprocessing,
                                                                repetitions=repetitions, warmup=warmup)
 
