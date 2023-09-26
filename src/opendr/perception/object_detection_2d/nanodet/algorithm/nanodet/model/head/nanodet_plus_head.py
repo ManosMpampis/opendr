@@ -180,12 +180,6 @@ class NanoDetPlusHead(nn.Module):
         return outputs
 
     @torch.jit.unused
-    def forward_fork(self, feats: List[Tensor]):
-        futures = [torch.jit.fork(self.fork_stem, feats[idx], cls_convs, gfl_cls)
-                   for idx, (cls_convs, gfl_cls) in enumerate(zip(self.cls_convs, self.gfl_cls))
-                   ]
-        outputs = [torch.jit.wait(future) for future in futures]
-        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
     def graph_forward(self, feats: List[Tensor]):
         outputs = []
         for idx, (feat, cls_convs, gfl_cls, stride) in enumerate(
