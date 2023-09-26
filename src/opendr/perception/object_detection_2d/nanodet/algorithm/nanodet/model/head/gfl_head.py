@@ -54,7 +54,7 @@ class Integral(nn.Module):
         super(Integral, self).__init__()
         self.reg_max = reg_max
         self.register_buffer(
-            "project", torch.linspace(0, self.reg_max, self.reg_max + 1)
+            "project", torch.linspace(0, self.reg_max, self.reg_max + 1).unsqueeze(0)
         )
 
     def forward(self, x):
@@ -67,14 +67,9 @@ class Integral(nn.Module):
             x (Tensor): Integral result of box locations, i.e., distance
                 offsets from the box center in four directions, shape (N, 4).
         """
-        shape = x.size()
-        if torch.jit.is_scripting():
-            x = F.softmax(x.reshape(shape[0], shape[1], 4, self.reg_max + 1), dim=-1)
-            x = F.linear(x, self.project.type_as(x)).reshape(shape[0], shape[1], 4)
-            return x
-
-        x = F.softmax(x.reshape(*shape[:-1], 4, self.reg_max + 1), dim=-1)
-        x = F.linear(x, self.project.type_as(x)).reshape(*shape[:-1], 4)
+        bs, fmap, regs = x.shape
+        x = F.softmax(x.view(bs, fmap, 4, self.reg_max + 1), dim=-1)
+        x = F.linear(x, self.project).view(bs, fmap, 4)
         return x
 
 

@@ -1026,7 +1026,8 @@ class NanodetLearner(Learner):
                     "Warning: More than one optimizations are initialized, inference will run in ONNX mode by default.\n"
                     "To run in a specific optimization please delete the self.ort_session, self.jit_model or self.trt_model like: detector.ort_session = None.")
             preds = self.ort_session.run(['output'], {'data': _input.cpu().numpy()})
-            res = self.predictor.postprocessing(torch.from_numpy(preds[0]), _input, *metadata)
+            preds = torch.from_numpy(preds[0]).to(self.device, torch.half if hf else torch.float32)
+            res = self.predictor.postprocessing(preds, _input, *metadata)
         elif self.jit_model:
             if self.trt_model:
                 warnings.warn(
@@ -1045,15 +1046,15 @@ class NanodetLearner(Learner):
             res = self.predictor.postprocessing(preds, _input, *metadata)
 
         bounding_boxes = []
-        for label in res:
-            for box in label:
-                box = box.to("cpu")
-                bbox = BoundingBox(left=box[0], top=box[1],
-                                   width=box[2] - box[0],
-                                   height=box[3] - box[1],
-                                   name=box[5],
-                                   score=box[4])
-                bounding_boxes.append(bbox)
+        for box in res:
+        # for box in label:
+            box = box.to("cpu")
+            bbox = BoundingBox(left=box[0], top=box[1],
+                               width=box[2] - box[0],
+                               height=box[3] - box[1],
+                               name=box[5],
+                               score=box[4])
+            bounding_boxes.append(bbox)
         bounding_boxes = BoundingBoxList(bounding_boxes)
         bounding_boxes.data.sort(key=lambda v: v.confidence)
 

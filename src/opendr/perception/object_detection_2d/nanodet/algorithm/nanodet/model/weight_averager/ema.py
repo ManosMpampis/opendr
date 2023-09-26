@@ -32,6 +32,8 @@ class ExpMovingAverager(object):
         """Load state from the model."""
         self.state.clear()
         for name, val in self._get_model_state_iterator(model):
+            if "center_priors_" in name:
+                continue
             val = val.detach().clone()
             self.state[name] = val.to(self.device) if self.device else val
 
@@ -42,6 +44,8 @@ class ExpMovingAverager(object):
         """Apply EMA state to the model."""
         with torch.no_grad():
             for name, val in self._get_model_state_iterator(model):
+                if "center_priors_" in name:
+                    continue
                 assert (
                     name in self.state
                 ), f"Name {name} not exist, available names are {self.state.keys()}"
@@ -53,6 +57,8 @@ class ExpMovingAverager(object):
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         self.state.clear()
         for name, val in state_dict.items():
+            if "center_priors_" in name:
+                continue
             self.state[name] = val.to(self.device) if self.device else val
 
     def to(self, device: torch.device) -> None:
@@ -74,6 +80,8 @@ class ExpMovingAverager(object):
         decay = self.calculate_dacay(iteration)
         with torch.no_grad():
             for name, val in self._get_model_state_iterator(model):
+                if "center_priors_" in name:
+                    continue
                 ema_val = self.state[name]
                 if self.device:
                     val = val.to(self.device)

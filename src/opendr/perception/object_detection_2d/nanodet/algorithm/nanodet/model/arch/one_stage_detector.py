@@ -80,10 +80,17 @@ class OneStageDetector(nn.Module):
             x = self.head(x)
         return x
 
-    def inference(self, img):#meta: Dict[str, torch.Tensor]):
+    def inference(self, x):
         with torch.no_grad():
-            preds = self(img)
-        return preds
+            x = self.backbone(x)
+            if hasattr(self, "fpn"):
+                x = self.fpn(x)
+            if hasattr(self, "head"):
+                if hasattr(self.head, "graph_forward"):
+                    x = self.head.graph_forward(x)
+                else:
+                    x = self.head(x)
+        return x
 
     def warm_up(self, img):
         return self.inference(img)

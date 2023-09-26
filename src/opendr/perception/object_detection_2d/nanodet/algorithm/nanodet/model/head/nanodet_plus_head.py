@@ -173,11 +173,10 @@ class NanoDetPlusHead(nn.Module):
                 )
             dis_preds = project * self._buffers[f"center_priors_{idx}"][..., 2, None]
             decoded_bboxes = distance2bbox(self._buffers[f"center_priors_{idx}"][..., :2], dis_preds)
-            output = torch.cat((cls.sigmoid(), reg, decoded_bboxes), dim=2)
+            output = torch.cat((cls, reg, decoded_bboxes), dim=2)
             outputs.append(output)
-            # outputs.append(output.flatten(start_dim=2))
 
-        # outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
+        outputs = torch.cat(outputs, dim=1)
         return outputs
 
     @torch.jit.unused
@@ -187,6 +186,32 @@ class NanoDetPlusHead(nn.Module):
                    ]
         outputs = [torch.jit.wait(future) for future in futures]
         outputs = torch.cat(outputs, dim=2).permute(0, 2, 1)
+    def graph_forward(self, feats: List[Tensor]):
+        outputs = []
+        for idx, (feat, cls_convs, gfl_cls, stride) in enumerate(
+                zip(feats, self.cls_convs, self.gfl_cls, self.strides)):
+            feat = cls_convs(feat)
+            output = gfl_cls(feat)
+
+            bs, _, ny, nx = output.shape
+            output = output.flatten(start_dim=2).permute(0, 2, 1).contiguous()
+
+            cls, reg = output.split(
+                [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
+            )
+            project = self.distribution_project(reg)
+            if self.dynamic or self._buffers[f"center_priors_{idx}"].shape != project.shape:
+                self._buffers[f"center_priors_{idx}"] = (
+                    self.get_single_level_center_priors(
+                        bs, (ny, nx), stride, dtype=project.dtype, device=project.device
+                    )
+                )
+            dis_preds = project * self._buffers[f"center_priors_{idx}"][..., 2, None]
+            decoded_bboxes = distance2bbox(self._buffers[f"center_priors_{idx}"][..., :2], dis_preds)
+            output = torch.cat((cls.sigmoid(), decoded_bboxes), dim=2)
+            outputs.append(output)
+
+        outputs = torch.cat(outputs, dim=1)
         return outputs
 
     @torch.jit.unused
@@ -208,34 +233,17 @@ class NanoDetPlusHead(nn.Module):
         """
         gt_bboxes = gt_meta["gt_bboxes"]
         gt_labels = gt_meta["gt_labels"]
-        device = preds.device
-        batch_size = preds.shape[0]
-        input_height, input_width = gt_meta["img"].shape[2:]
-        featmap_sizes = [
-            (math.ceil(input_height / stride), math.ceil(input_width / stride))
-            for stride in self.strides
-        ]
-        # get grid cells of one image
-        mlvl_center_priors = [
-            self.get_single_level_center_priors(
-                batch_size,
-                featmap_sizes[i],
-                stride,
-                dtype=torch.float32,
-                device=device,
-            )
-            for i, stride in enumerate(self.strides)
-        ]
-        center_priors = torch.cat(mlvl_center_priors, dim=1)
 
-        cls_preds, reg_preds = preds.split(
-            [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
+        cls_preds, reg_preds, decoded_bboxes = preds.split(
+            [self.num_classes, 4 * (self.reg_max + 1), 4], dim=-1
         )
-        dis_preds = self.distribution_project(reg_preds) * center_priors[..., 2, None]
-        decoded_bboxes = distance2bbox(center_priors[..., :2], dis_preds)
 
+        center_priors = torch.cat([self._buffers[f"center_priors_{idx}"] for idx in range(len(self.strides))], dim=1)
         if aux_preds is not None:
             # use auxiliary head to assign
+            # aux_cls_preds, aux_reg_preds, aux_decoded_bboxes = aux_preds.split(
+            #     [self.num_classes, 4 * (self.reg_max + 1), 4], dim=-1
+            # )
             aux_cls_preds, aux_reg_preds = aux_preds.split(
                 [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
             )
@@ -424,23 +432,12 @@ class NanoDetPlusHead(nn.Module):
             # tensors exclusively for better optimization during scripting.
             return self._eval_post_process(preds, meta)
 
-        cls_scores, bbox_preds, bboxes = preds.split(
-            [self.num_classes, 4 * (self.reg_max + 1), 2], dim=-1
+        cls_scores, bboxes = preds.split(
+            [self.num_classes, 4], dim=-1
         )
 
-
-        # bboxes = distance2bbox(center_priors[..., :2], dis_preds, max_shape=input_shape)
-        # add a dummy background class at the end of all labels
-        # if torch.jit.is_scripting() or mode == "infer":
-        #     # for faster inference and jit scripting in most common cases we do not try to go through for statement
-        #     score, bbox = cls_scores[0], bboxes[0]
-        #     padding = score.new_zeros(score.shape[0], 1)
-        #     score = torch.cat([score, padding], dim=1)
-        #
-        #     return multiclass_nms(bbox, score, score_thr=conf_thresh, nms_cfg=dict(iou_threshold=iou_thresh),
-        #                           max_num=nms_max_num)
-
-        results = []
+        labels = torch.arange(self.num_classes, device=self.center_priors_0.device).unsqueeze(1).unsqueeze(1)
+        det_results = []
         for i in range(cls_scores.shape[0]):
             # add a dummy background class at the end of all labels
             # same with mmdetection2.0
@@ -448,57 +445,48 @@ class NanoDetPlusHead(nn.Module):
             padding = score.new_zeros(score.shape[0], 1)
             score = torch.cat([score, padding], dim=1)
 
-            results.append(
-                multiclass_nms(
-                    bbox, score, score_thr=conf_thresh, nms_cfg=dict(iou_threshold=iou_thresh), max_num=nms_max_num)
+            det_bboxes, det_labels = multiclass_nms(bbox, score, score_thr=conf_thresh, nms_cfg=dict(iou_threshold=iou_thresh), max_num=nms_max_num)
+
+            det_bboxes[:, :4] = scriptable_warp_boxes(
+                det_bboxes[:, :4],
+                torch.linalg.inv(meta["warp_matrix"][i]), meta["width"][i], meta["height"][i]
             )
-
-        (det_bboxes, det_labels) = results
-
-        det_result = []
-        labels = torch.arange(self.num_classes, device=det_bboxes.device).unsqueeze(1).unsqueeze(1)
-        for i in range(self.num_classes):
-            inds = det_labels == i
-
-            class_det_bboxes = det_bboxes[inds]
-            class_det_bboxes[:, :4] = scriptable_warp_boxes(
-                class_det_bboxes[:, :4],
-                torch.linalg.inv(meta["warp_matrix"]), meta["width"], meta["height"]
-            )
-            if class_det_bboxes.shape[0] != 0:
-                det = torch.cat((
-                    class_det_bboxes,
-                    labels[i].repeat(class_det_bboxes.shape[0], 1)
-                ), dim=1)
-                det_result.append(det)
-
-        return det_result
+            for i in range(self.num_classes):
+                inds = det_labels == i
+                class_det_bboxes = det_bboxes[inds]
+                if class_det_bboxes.shape[0] != 0:
+                    det = torch.cat(
+                        (
+                        class_det_bboxes,
+                        labels[i].repeat(class_det_bboxes.shape[0], 1)
+                        ),
+                        dim=1,
+                    )
+                    det_results.append(det.squeeze())
+        return det_results
 
     def _eval_post_process(self, preds, meta):
-        cls_scores, bbox_preds = preds.split(
-            [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
+        # TODO: get_bboxes must run in loop and can be used only tensors for better performance
+        cls_scores, _, bbox_preds = preds.split(
+            [self.num_classes, 4 * (self.reg_max + 1), 4], dim=-1
         )
-        result_list = self.get_bboxes(cls_scores, bbox_preds, meta["img"], mode="eval")
+        result_list = self.get_bboxes(cls_scores, bbox_preds)
         det_results = {}
-        warp_matrixes = (
-            meta["warp_matrix"]
-            if isinstance(meta["warp_matrix"], list)
-            else meta["warp_matrix"]
-        )
+        warp_matrixes = meta["warp_matrix"]
         img_heights = (
-            meta["img_info"]["height"].cpu().numpy()
-            if isinstance(meta["img_info"]["height"], torch.Tensor)
-            else meta["img_info"]["height"]
+            meta["height"].cpu().numpy()
+            if isinstance(meta["height"], torch.Tensor)
+            else meta["height"]
         )
         img_widths = (
-            meta["img_info"]["width"].cpu().numpy()
-            if isinstance(meta["img_info"]["width"], torch.Tensor)
-            else meta["img_info"]["width"]
+            meta["width"].cpu().numpy()
+            if isinstance(meta["width"], torch.Tensor)
+            else meta["width"]
         )
         img_ids = (
-            meta["img_info"]["id"].cpu().numpy()
-            if isinstance(meta["img_info"]["id"], torch.Tensor)
-            else meta["img_info"]["id"]
+            meta["id"].cpu().numpy()
+            if isinstance(meta["id"], torch.Tensor)
+            else meta["id"]
         )
 
         for result, img_width, img_height, img_id, warp_matrix in zip(
@@ -523,53 +511,23 @@ class NanoDetPlusHead(nn.Module):
             det_results[img_id] = det_result
         return det_results
 
-    def get_bboxes(self, cls_preds, reg_preds, input_img, mode: str = "infer", conf_threshold: float = 0.05,
+    def get_bboxes(self, cls_preds, bboxes, conf_threshold: float = 0.05,
                    iou_threshold: float = 0.6, nms_max_num: int = 100):
         """Decode the outputs to bboxes.
         Args:
             cls_preds (Tensor): Shape (num_imgs, num_points, num_classes).
-            reg_preds (Tensor): Shape (num_imgs, num_points, 4 * (regmax + 1)).
-            input_img (Tensor): Input image to net.
-            mode (str): Determines if it uses batches and numpy or tensors for scripting.
+            bboxes (Tensor): Shape (num_imgs, num_points, 4).
             conf_threshold (float): Determines the confident threshold.
             iou_threshold (float): Determines the iou threshold in nms.
             nms_max_num (int): Determines the maximum number of bounding boxes that will be retained following the nms.
         Returns:
             results_list (list[tuple]): List of detection bboxes and labels.
         """
-        device = cls_preds.device
-        b = cls_preds.shape[0]
-        input_height, input_width = input_img.shape[2:]
-        input_shape = (input_height, input_width)
-
-        featmap_sizes = [
-            (int(math.ceil(input_height / stride)), int(math.ceil(input_width / stride)))
-            for stride in self.strides
-        ]
-        # get grid cells of one image
-        mlvl_center_priors = []
-        for i, stride in enumerate(self.strides):
-            proiors = self.get_single_level_center_priors(
-                b, featmap_sizes[i], stride, cls_preds.dtype, device
-            )
-            mlvl_center_priors.append(proiors)
-
-        center_priors = torch.cat(mlvl_center_priors, dim=1)
-        dis_preds = self.distribution_project(reg_preds) * center_priors[..., 2, None]
-        bboxes = distance2bbox(center_priors[..., :2], dis_preds, max_shape=input_shape)
         cls_preds = cls_preds.sigmoid()
+
         # add a dummy background class at the end of all labels
-        if torch.jit.is_scripting() or mode == "infer":
-            # for faster inference and jit scripting in most common cases we do not try to go through for statement
-            score, bbox = cls_preds[0], bboxes[0]
-            padding = score.new_zeros(score.shape[0], 1)
-            score = torch.cat([score, padding], dim=1)
-
-            return multiclass_nms(bbox, score, score_thr=conf_threshold, nms_cfg=dict(iou_threshold=iou_threshold),
-                                  max_num=nms_max_num)
-
         result_list = []
-        for i in range(b):
+        for i in range(cls_preds.shape[0]):
             # add a dummy background class at the end of all labels
             # same with mmdetection2.0
             score, bbox = cls_preds[i], bboxes[i]
@@ -578,8 +536,8 @@ class NanoDetPlusHead(nn.Module):
             results = multiclass_nms(
                 bbox,
                 score,
-                score_thr=0.05,
-                nms_cfg=dict(iou_threshold=0.6),
+                score_thr=conf_threshold,
+                nms_cfg=dict(iou_threshold=iou_threshold),
                 max_num=nms_max_num,
             )
             result_list.append(results)

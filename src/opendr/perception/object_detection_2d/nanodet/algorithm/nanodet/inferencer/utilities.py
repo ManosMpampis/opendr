@@ -104,7 +104,7 @@ class Predictor(nn.Module):
         return _input, _height, _width, _warp_matrix
 
     def postprocessing(self, preds, input, height, width, warp_matrix):
-        meta = {"height": height, "width": width, 'img': input, 'warp_matrix': warp_matrix}
+        meta = dict(height=height.unsqueeze(0), width=width.unsqueeze(0), id=torch.zeros(1, 1), warp_matrix=warp_matrix.unsqueeze(0), img=input.unsqueeze(0))
         res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_threshold, iou_thresh=self.iou_threshold,
                                            nms_max_num=self.nms_max_num)
         return res
@@ -123,8 +123,9 @@ class Postprocessor(nn.Module):
         self.model = model.to(device).eval()
 
     def forward(self, preds, input, height, width, warp_matrix):
-        meta = {"height": height, "width": width, 'img': input.half() if self.hf else input, 'warp_matrix': warp_matrix}
+        meta = dict(height=height.unsqueeze(0), width=width.unsqueeze(0), id=torch.zeros(1, 1), warp_matrix=warp_matrix.unsqueeze(0), img=input.unsqueeze(0))
         if self.hf:
+            meta["img"] = meta["img"].half()
             preds = preds.half()
         res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_threshold, iou_thresh=self.iou_threshold,
                                            nms_max_num=self.nms_max_num)
