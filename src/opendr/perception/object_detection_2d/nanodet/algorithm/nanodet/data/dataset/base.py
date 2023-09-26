@@ -107,7 +107,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 if cache_images == 'disk':
                     b += self.npy_files[i].stat().st_size
                 else:  # 'ram'
-                    self.metas[i] = x  # meta = dict(img, img_info, gt_bboxes, gt_labels)
+                    self.metas[i] = x  # meta = dict(img, height, width, id, file_name, gt_bboxes, gt_labels)
                     b += get_size(self.metas[i])
                 pbar.desc = f'{mode}: Caching images ({b / gb:.1f}GB {cache_images})'
             pbar.close()

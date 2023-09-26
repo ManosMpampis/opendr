@@ -83,11 +83,8 @@ class Predictor(nn.Module):
                 input_size = self.cfg.data.val.input_size
         else:
             input_size = self.cfg.data.val.input_size
-        img_info = {"id": 0}
         height, width = img.shape[:2]
-        img_info["height"] = height
-        img_info["width"] = width
-        meta = dict(img_info=img_info, raw_img=img, img=img)
+        meta = dict(id=0, height=height, width=width, raw_img=img, img=img)
         meta = self.pipeline(None, meta, input_size)
         meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device)
 

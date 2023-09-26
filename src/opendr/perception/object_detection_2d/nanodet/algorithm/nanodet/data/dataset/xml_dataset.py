@@ -189,7 +189,7 @@ if __name__ == '__main__':
     #                      class_names=classes, input_size=(192, 192), pipeline=pipeline)
 
     for i, meta_data in enumerate(dataset):
-        print(f'{meta_data["img_info"]["file_name"]}.jpg')
+        print(f'{meta_data["file_name"]}.jpg')
         img = Image(meta_data["img"])
         targets = []
         for i in range(len(meta_data["gt_bboxes"])):
@@ -200,11 +200,11 @@ if __name__ == '__main__':
             targets = BoundingBoxList(targets)
             img = draw_bounding_boxes(img.opencv(), targets, class_names=dataset.class_names)
             cv2.imshow('img', img)
-            # cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["img_info"]["file_name"]}.jpg', img)
+            # cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["file_name"]}.jpg', img)
             cv2.waitKey(0)
 
         # img = draw_bounding_boxes(img.opencv(), targets, class_names=dataset.class_names)
         # cv2.imshow('img', img)
-        # cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["img_info"]["file_name"]}.jpg', img)
+        # cv2.imwrite(f'/home/manos/Desktop/del_images/original/{meta_data["file_name"]}.jpg', img)
         # cv2.waitKey(0)
     cv2.destroyAllWindows()

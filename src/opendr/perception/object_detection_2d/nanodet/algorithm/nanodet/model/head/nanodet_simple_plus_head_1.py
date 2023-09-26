@@ -535,19 +535,19 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
             else meta["warp_matrix"]
         )
         img_heights = (
-            meta["img_info"]["height"].cpu().numpy()
-            if isinstance(meta["img_info"]["height"], torch.Tensor)
-            else meta["img_info"]["height"]
+            meta["height"].cpu().numpy()
+            if isinstance(meta["height"], torch.Tensor)
+            else meta["height"]
         )
         img_widths = (
-            meta["img_info"]["width"].cpu().numpy()
-            if isinstance(meta["img_info"]["width"], torch.Tensor)
-            else meta["img_info"]["width"]
+            meta["width"].cpu().numpy()
+            if isinstance(meta["width"], torch.Tensor)
+            else meta["width"]
         )
         img_ids = (
-            meta["img_info"]["id"].cpu().numpy()
-            if isinstance(meta["img_info"]["id"], torch.Tensor)
-            else meta["img_info"]["id"]
+            meta["id"].cpu().numpy()
+            if isinstance(meta["id"], torch.Tensor)
+            else meta["id"]
         )
 
         for result, img_width, img_height, img_id, warp_matrix in zip(
