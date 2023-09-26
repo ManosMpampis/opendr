@@ -51,7 +51,7 @@ def multiclass_nms(
     scores = torch.masked_select(scores, valid_mask)
 
     # for scripting
-    labels = torch.tensor(0).to(valid_mask.device).long()
+    labels = torch.tensor(0, dtype=torch.long, device=valid_mask.device)
     torch.nonzero(valid_mask, out=labels)
     # labels = valid_mask.nonzero(as_tuple=False)#[:, 1]
     labels = labels[:, 1]
@@ -114,14 +114,14 @@ def batched_nms(boxes, scores, idxs, nms_cfg: Dict[str, float], class_agnostic: 
         total_mask = scores.new_zeros(scores.size(), dtype=torch.bool)
         for id in torch.unique(idxs):
             mask = (idxs == id)
-            mask_out = torch.tensor(0).to(mask.device).long()
+            mask_out = torch.tensor(0, dtype=torch.long, device=mask.device)
             torch.nonzero(mask, out=mask_out)
             mask = mask_out.view(-1)
             # mask = (idxs == id).nonzero(as_tuple=False).view(-1)
             keep = nms(boxes_for_nms[mask], scores[mask], nms_cfg_["iou_threshold"])
             total_mask[mask[keep]] = True
 
-        keep_out = torch.tensor(0).to(total_mask.device).long()
+        keep_out = torch.tensor(0, dtype=torch.long, device=mask.device)
         torch.nonzero(total_mask, out=keep_out)
         keep = keep_out.view(-1)
         # keep = total_mask.nonzero(as_tuple=False).view(-1)

@@ -63,11 +63,9 @@ class NanoDetPlusHead(nn.Module):
         reg_max=7,
         activation="LeakyReLU",
         assigner_cfg=dict(topk=13),
-        fork=False,
         **kwargs
     ):
         super(NanoDetPlusHead, self).__init__()
-        self.fork = fork
         self.num_classes = num_classes
         self.in_channels = input_channel
         self.feat_channels = feat_channels
@@ -152,8 +150,6 @@ class NanoDetPlusHead(nn.Module):
 
     @torch.jit.unused
     def forward(self, feats: List[Tensor]):
-        if self.fork:
-            return self.forward_fork(feats)
         outputs = []
         for idx, (feat, cls_convs, gfl_cls, stride) in enumerate(zip(feats, self.cls_convs, self.gfl_cls, self.strides)):
             feat = cls_convs(feat)
@@ -207,12 +203,6 @@ class NanoDetPlusHead(nn.Module):
 
         outputs = torch.cat(outputs, dim=1)
         return outputs
-
-    @torch.jit.unused
-    def fork_stem(self, feat: Tensor, cls_convs, gfl_cls):
-        for conv in cls_convs:
-            feat = conv(feat)
-        return gfl_cls(feat).flatten(start_dim=2)
 
     def loss(self, preds, gt_meta, aux_preds=None):
         """Compute losses.

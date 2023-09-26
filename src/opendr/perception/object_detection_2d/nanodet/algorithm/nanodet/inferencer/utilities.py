@@ -97,9 +97,9 @@ class Predictor(nn.Module):
         # meta["img"] = meta["img"].to(torch.uint8)
         _input = meta["img"]
         _input = _input.to(memory_format=torch.channels_last) if self.ch_l else _input
-        _height = torch.as_tensor(height)
-        _width = torch.as_tensor(width)
-        _warp_matrix = torch.from_numpy(meta["warp_matrix"])
+        _height = torch.as_tensor(height, device=self.device)
+        _width = torch.as_tensor(width, device=self.device)
+        _warp_matrix = torch.from_numpy(meta["warp_matrix"]).to(self.device)
 
         return _input, _height, _width, _warp_matrix
 

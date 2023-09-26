@@ -130,7 +130,7 @@ class NanodetLearner(Learner):
             #     import shutil
             #     shutil.rmtree(f'./models/{model_log_name}')
             writer = SummaryWriter(f'./models/{model_log_name}')
-            writer.add_graph(self.model.eval(), self.__dummy_input()[0].to("cpu"))
+            writer.add_graph(self.model.eval().to("cpu"), self.__dummy_input()[0].to("cpu"))
             writer.close()
             self.model = self.model.to(device)
 
@@ -488,8 +488,9 @@ class NanodetLearner(Learner):
         export_path_onnx = os.path.join(trt_path, f"nanodet_{self.cfg.check_point_name}.onnx")
         export_path_trt = os.path.join(trt_path, f"nanodet_{f'int8_{self.cfg.check_point_name}' if int else self.cfg.check_point_name}.trt")
         calib_cache = os.path.join(trt_path, calib_cache)
-        export_path_json = os.path.join(trt_path, f"nanodet_{f'int8_{self.cfg.check_point_name}' if int else self.cfg.check_point_name}.json")
 
+        # EXTRA start
+        export_path_json = os.path.join(trt_path, f"nanodet_{f'int8_{self.cfg.check_point_name}' if int else self.cfg.check_point_name}.json")
         from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.inferencer.utilities import Postprocessor
         postprocessor = Postprocessor(self.cfg, self.model, device=self.device, conf_thresh=predictor.conf_threshold,
                                       iou_thresh=predictor.iou_threshold, nms_max_num=predictor.nms_max_num, hf=predictor.hf)
@@ -498,6 +499,7 @@ class NanodetLearner(Learner):
             post_process_scripted = torch.jit.script(postprocessor)
             post_process_scripted.save(export_path_pth)
             del post_process_scripted
+        # EXTRA end
 
         if not os.path.exists(export_path_onnx):
             assert torch.__version__[2:4] == "13",\
@@ -592,8 +594,6 @@ class NanodetLearner(Learner):
 
     def _save_jit(self, jit_path, predictor, verbose=True):
 
-        os.makedirs(jit_path, exist_ok=True)
-        os.makedirs(f"{jit_path}/trace", exist_ok=True)
         dummy_input = self.__dummy_input(hf=predictor.hf)
         with torch.no_grad():
             export_path = os.path.join(jit_path, f"nanodet_{self.cfg.check_point_name}.pth")
@@ -606,12 +606,14 @@ class NanodetLearner(Learner):
                         "format": "pth", "has_data": False, "optimized": True, "optimizer_info": {},
                         "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
                                              "conf_threshold": predictor.conf_threshold, "iou_threshold": predictor.iou_threshold}}
+            os.makedirs(jit_path, exist_ok=True)
             model_scripted.save(export_path)
 
             with open(os.path.join(jit_path, f"nanodet_{self.cfg.check_point_name}.json"),
                       'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=4)
 
+            os.makedirs(f"{jit_path}/trace", exist_ok=True)
             model_traced.save(export_path_trace)
             with open(os.path.join(jit_path, "trace", f"nanodet_{self.cfg.check_point_name}.json"),
                       'w', encoding='utf-8') as f:
