@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/simple_big_ch_very_small_annots_SGD
-check_point_name: simple_big_ch_very_small_annots_SGD
+save_dir: ./temp/simple_big_ch_very_small_annots #_2_5
+check_point_name: simple_big_ch_very_small_annots #_2_5
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -13,7 +13,6 @@ model:
       activation: LeakyReLU
       use_depthwise: False
       quant: False
-      pretrain: False
     fpn:
       name: SimpleGPAN_1 #PAN #FPN  #PAN a litle slower than FPN
       in_channels: [ 32, 64 ]
@@ -107,7 +106,7 @@ device:
 schedule:
   resume: 0
   optimizer:
-    name: SGD
+    name: AdamW
     lr: 0.005
     weight_decay: 0.05
   warmup:
