@@ -13,7 +13,6 @@ model:
       activation: LeakyReLU
       use_depthwise: False
       quant: False
-      pretrain: False
     fpn:
       name: SimpleGPAN_1 #PAN #FPN  #PAN a litle slower than FPN
       in_channels: [ 32, 64 ]
