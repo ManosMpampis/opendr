@@ -404,7 +404,7 @@ class NanodetLearner(Learner):
             self.info(f"{e}, val input will be used", True)
             width, height = self.cfg.data.val.input_size
         dummy_img = divisible_padding(
-            torch.empty((3, height, width), device=self.device, dtype=torch.half if hf else torch.float32),
+            torch.zeros((3, height, width), device=self.device, dtype=torch.half if hf else torch.float32),
             divisible=torch.tensor(32, device=self.device, dtype=torch.half if hf else torch.float32)
         )
         dummy_img = dummy_img.contiguous(memory_format=torch.channels_last) if ch_l else dummy_img
@@ -422,7 +422,7 @@ class NanodetLearner(Learner):
         except AttributeError as e:
             self.info(f"{e}, not bench_est.input_size int yaml file, val will be used instead")
             width, height = self.cfg.data.val.input_size
-        return torch.empty((width, height, 3), device="cpu", dtype=torch.half if hf else torch.float32).numpy()
+        return torch.zeros((width, height, 3), device="cpu", dtype=torch.half if hf else torch.float32).numpy()
 
     def _save_onnx(self, onnx_path, predictor, do_constant_folding=False, verbose=True, dynamic=True):
 
@@ -1172,7 +1172,7 @@ class NanodetLearner(Learner):
         onnx_infer_timings = None
         if self.ort_session:
             # Inference
-            preds, onnx_infer_timings = bench_loop(dummy_input, self.ort_session, repetitions, warmup,
+            preds, onnx_infer_timings = bench_loop(dummy_input, self.ort_session.run, repetitions, warmup,
                                                    sing_inputs=False, onnx_fun=True)
 
         # Jit measurements
@@ -1335,6 +1335,7 @@ class NanodetLearner(Learner):
         """
 
         import numpy as np
+        from tqdm import tqdm
 
         dummy_input = self.__cv_dumy_input()
         self.model.float()
@@ -1390,77 +1391,84 @@ class NanodetLearner(Learner):
         onnx_infer_timings = []
         if self.ort_session:
             # warmup
-            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+            (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
             _input = _input.cpu().numpy()
-            _preds = self.ort_session(['output'], {'data': _input})
+            _preds = self.ort_session.run(['output'], {'data': _input})
+            _preds = torch.from_numpy(_preds[0]).to(self.device, torch.half if hf else torch.float32)
             _out = self.predictor.postprocessing(_preds, _input, *_metadata)
 
             # bench
-            for data in dataset:
+            for (_img, _) in tqdm(dataset, total=len(dataset)):
+                _img = _img.opencv()
                 (_input, *_metadata), _ = profile(
-                    (data, True), self.predictor.preprocessing,
+                    (_img, True), self.predictor.preprocessing,
                     sing_inputs=False
                 )
-                _preds, onnx_infer_time = profile(_input, self.ort_session, onnx_fun=True)
+                _input = _input.cpu().numpy()
+                _preds, onnx_infer_time = profile(_input, self.ort_session.run, onnx_fun=True)
+                _preds = torch.from_numpy(_preds[0]).to(self.device, torch.half if hf else torch.float32)
                 onnx_infer_timings.append(onnx_infer_time)
-        onnx_infer_timings = np.ndarray(onnx_infer_timings)
+        onnx_infer_timings = np.array(onnx_infer_timings)
 
         # Jit measurements
         jit_model_infer_timings = []
         if self.jit_only_model:
             # warmup
-            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
-            _preds = self.jit_only_model((_input, *_metadata))
+            (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
+            _preds = self.jit_only_model(_input, *_metadata)
             _out = self.predictor.postprocessing(_preds, _input, *_metadata)
-            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
-            _preds = self.jit_only_model((_input, *_metadata))
+            (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
+            _preds = self.jit_only_model(_input, *_metadata)
             _out = self.predictor.postprocessing(_preds, _input, *_metadata)
 
             # bench
-            for data in dataset:
+            for (_img, _) in tqdm(dataset, total=len(dataset)):
+                _img = _img.opencv()
                 (_input, *_metadata), _ = profile(
-                    (data, True), self.predictor.preprocessing,
+                    (_img, True), self.predictor.preprocessing,
                     sing_inputs=False
                 )
                 _preds, jit_model_infer_time = profile((_input, *_metadata), self.jit_only_model, sing_inputs=False)
                 jit_model_infer_timings.append(jit_model_infer_time)
-        jit_model_infer_timings = np.ndarray(jit_model_infer_timings)
+        jit_model_infer_timings = np.array(jit_model_infer_timings)
 
         # Jit measurements
         jit_infer_timings = []
         if self.jit_model:
             # warmup
-            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
-            _out = self.jit_model((_input, *_metadata))
-            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
-            _out = self.jit_model((_input, *_metadata))
+            (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
+            _out = self.jit_model(_input, *_metadata)
+            (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
+            _out = self.jit_model(_input, *_metadata)
 
             # bench
-            for data in dataset:
+            for (_img, _) in tqdm(dataset, total=len(dataset)):
+                _img = _img.opencv()
                 (_input, *_metadata), _ = profile(
-                    (data, True), self.predictor.preprocessing,
+                    (_img, True), self.predictor.preprocessing,
                     sing_inputs=False
                 )
                 _preds, jit_infer_time = profile((_input, *_metadata), self.jit_model, sing_inputs=False)
                 jit_infer_timings.append(jit_infer_time)
-        jit_infer_timings = np.ndarray(jit_infer_timings)
+        jit_infer_timings = np.array(jit_infer_timings)
 
         # trt measurements
         trt_infer_timings = []
         trt_post_timings = []
         if self.trt_model:
             # warmup
-            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
-            _preds = self.trt_model((_input, *_metadata))
+            (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
+            _preds = self.trt_model(_input)
             _out = self.predictor.postprocessing(_preds, _input, *_metadata)
-            (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
-            _preds = self.trt_model((_input, *_metadata))
+            (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
+            _preds = self.trt_model(_input)
             _out = self.predictor.postprocessing(_preds, _input, *_metadata)
 
             # bench
-            for data in dataset:
+            for (_img, _) in tqdm(dataset, total=len(dataset)):
+                _img = _img.opencv()
                 (_input, *_metadata), _ = profile(
-                    (data, True), self.predictor.preprocessing,
+                    (_img, True), self.predictor.preprocessing,
                     sing_inputs=False
                 )
                 _preds, trt_infer_time = profile(_input, self.trt_model, sing_inputs=True)
@@ -1468,20 +1476,21 @@ class NanodetLearner(Learner):
 
                 _out, trt_post_time = profile((_preds, _input, *_metadata), self.jit_postprocessing, sing_inputs=False)
                 trt_post_timings.append(trt_post_time)
-        trt_infer_timings = np.ndarray(trt_infer_timings)
-        trt_post_timings = np.ndarray(trt_post_timings)
+        trt_infer_timings = np.array(trt_infer_timings)
+        trt_post_timings = np.array(trt_post_timings)
 
 
         # Original Python measurements
         preprocess_timings = []
         infer_timings = []
         post_timings = []
-        (_input, *_metadata) = self.predictor.preprocessing((dummy_input, True))
+        (_input, *_metadata) = self.predictor.preprocessing(dummy_input, True)
         _preds = self.predictor(_input)
         _out = self.predictor.postprocessing(_preds, _input, *_metadata)
-        for data in dataset:
+        for (_img, _) in tqdm(dataset, total=len(dataset)):
+            _img = _img.opencv()
             (_input, *_metadata), preprocess_time = profile(
-                (data, True), self.predictor.preprocessing,
+                (_img, True), self.predictor.preprocessing,
                 sing_inputs=False
             )
             preprocess_timings.append(preprocess_time)
@@ -1492,6 +1501,15 @@ class NanodetLearner(Learner):
             # Post-processing measurements
             _out, post_time = profile((_preds, _input, *_metadata), self.predictor.postprocessing, sing_inputs=False)
             post_timings.append(post_time)
+        preprocess_timings = np.array(preprocess_timings)
+        infer_timings = np.array(infer_timings)
+        post_timings = np.array(post_timings)
+        full_run_timing = infer_timings + post_timings
+
+        if self.trt_model:
+            trt_full_run_timings = trt_infer_timings + trt_post_timings
+        if self.ort_session:
+            onnx_full_run_timings = onnx_infer_timings + post_timings
 
         # Measure std and mean of times
         std_preprocess_timings = np.std(preprocess_timings)
@@ -1512,8 +1530,10 @@ class NanodetLearner(Learner):
         if self.trt_model:
             mean_trt_infer_timings = np.mean(trt_infer_timings)
             mean_trt_post_timings = np.mean(trt_post_timings)
+            mean_trt_full_run_timings = np.mean(trt_full_run_timings)
         if self.ort_session:
             mean_onnx_infer_timings = np.mean(onnx_infer_timings)
+            mean_onnx_full_run_timings = np.mean(onnx_full_run_timings)
 
         # mean times to fps, torch measures in milliseconds
         fps_preprocess_timings = 1/mean_preprocess_timings
@@ -1530,9 +1550,10 @@ class NanodetLearner(Learner):
         if self.trt_model:
             fps_trt_infer_timings = 1 / mean_trt_infer_timings
             fps_trt_postprocessing_timings = 1 / mean_trt_post_timings
+            fps_trt_full_run_timings = 1 / mean_trt_full_run_timings
         if self.ort_session:
-            fps_onnx_infer_timings = 1/mean_onnx_infer_timings
-            fps_onnx_infer_post_timings = 1/(mean_onnx_infer_timings + mean_post_timings)
+            fps_onnx_infer_timings = 1 / mean_onnx_infer_timings
+            fps_onnx_full_run_timings = 1 / mean_onnx_full_run_timings
 
         # Print measurements
         print(f"\n\nMeasure of model: {self.cfg.check_point_name} \nHalf precision: {hf}\nFuse Convs: {fuse}\nChannel last: {ch_l}")
@@ -1552,14 +1573,15 @@ class NanodetLearner(Learner):
             print(f"\n\n=== TRT measurements === \n"
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s")
             print(f"infer          fps = {fps_trt_infer_timings} evn/s\n"
-                  f"postprocessing fps = {fps_trt_postprocessing_timings} evn/s")
+                  f"postprocessing fps = {fps_trt_postprocessing_timings} evn/s\n"
+                  f"infer + postpr fps = {fps_trt_full_run_timings} evn/s")
 
         if self.ort_session:
             print(f"\n\n=== ONNX measurements === \n"
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
                   f"infer          fps = {fps_onnx_infer_timings} evn/s\n"
                   f"postprocessing fps = {fps_post_timings} evn/s\n"
-                  f"infer + postpr fps = {fps_onnx_infer_post_timings} evn/s")
+                  f"infer + postpr fps = {fps_onnx_full_run_timings} evn/s")
 
         print(f"\n\n++++++ STD OF TIMES ++++++")
         print(f"std pre: {std_preprocess_timings}")
