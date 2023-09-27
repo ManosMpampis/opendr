@@ -1519,6 +1519,7 @@ class NanodetLearner(Learner):
         mean_preprocess_timings = np.mean(preprocess_timings)
         mean_infer_timings = np.mean(infer_timings)
         mean_post_timings = np.mean(post_timings)
+        mean_full_infer_timings = np.mean(full_run_timing)
 
         if self.jit_model:
             mean_jit_infer_timings = np.mean(jit_infer_timings)
@@ -1539,6 +1540,7 @@ class NanodetLearner(Learner):
         fps_preprocess_timings = 1/mean_preprocess_timings
         fps_infer_timings = 1/mean_infer_timings
         fps_post_timings = 1/mean_post_timings
+        fps_full_infer_timings = 1/mean_full_infer_timings
 
         if self.jit_only_model:
             fps_jit_model_infer_timings = 1/mean_jit_model_infer_timings
@@ -1559,8 +1561,9 @@ class NanodetLearner(Learner):
         print(f"\n\nMeasure of model: {self.cfg.check_point_name} \nHalf precision: {hf}\nFuse Convs: {fuse}\nChannel last: {ch_l}")
         print(f"\n=== Python measurements === \n"
               f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
-              f"infer          fps = {fps_infer_timings} evn/s\n"#)
-              f"postprocessing fps = {fps_post_timings} evn/s\n")
+              f"infer          fps = {fps_infer_timings} evn/s\n"
+              f"postprocessing fps = {fps_post_timings} evn/s\n"
+              f"infer + postpr fps = {fps_full_infer_timings} evn/s")
         if self.jit_model:
             print(f"\n\n=== JIT measurements === \n"
                   f"preprocessing  fps = {fps_preprocess_timings} evn/s")

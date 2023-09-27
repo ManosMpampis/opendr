@@ -4,7 +4,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_head import NanoDetHead
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_plus_head import NanoDetPlusHead
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.simple_conv_head import SimpleConvHead
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head_1 import SimplifierNanoDetPlusHead_1
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head_1_post import SimplifierNanoDetPlusHead_1
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.nanodet_simple_plus_head_2 import SimplifierNanoDetPlusHead_2
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.simple_nanodet_plus import SimplifierNanoDetPlusHead
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.yoloHead import YoloHead
