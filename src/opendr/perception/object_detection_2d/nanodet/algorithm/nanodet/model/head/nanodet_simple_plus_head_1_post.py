@@ -104,8 +104,11 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         self.strides = strides
         self.reg_max = reg_max
         self.activation = activation
-        for idx in range(len(strides)):
-            self.register_buffer(f"center_priors_{idx}", torch.empty(0))
+
+        self.center_priors_1 = torch.empty(0)
+        self.center_priors_0 = torch.empty(0)
+        # for idx in range(len(strides)):
+        #     self.register_buffer(f"center_priors_{idx}", torch.empty(0))
 
         if use_depthwise:
             self.ConvModule = DWConvQuant if quant else DWConv
@@ -186,6 +189,13 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         normal_init(self.gfl_cls0, std=0.01, bias=bias_cls)
         normal_init(self.gfl_cls1, std=0.01, bias=bias_cls)
         print("Finish initialize NanoDet-Plus Head.")
+
+    def _apply(self, fn):
+        # Apply to(), cpu(), cuda(), half() to model tensors that are not parameters or registered buffers
+        self = super()._apply(fn)
+        self.center_priors_0 = fn(self.center_priors_0)
+        self.center_priors_1 = fn(self.center_priors_1)
+        return self
 
     @torch.jit.unused
     def forward(self, feats: List[Tensor]):
@@ -293,7 +303,7 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
             [self.num_classes, 4 * (self.reg_max + 1), 4], dim=-1
         )
 
-        center_priors = torch.cat([self._buffers[f"center_priors_{idx}"] for idx in range(len(self.strides))], dim=1)
+        center_priors = torch.cat([self.center_priors_0, self.center_priors_1], dim=1)
         if aux_preds is not None:
             # use auxiliary head to assign
             # aux_cls_preds, aux_reg_preds, aux_decoded_bboxes = aux_preds.split(
