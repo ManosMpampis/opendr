@@ -128,7 +128,7 @@ if __name__ == '__main__':
     #     "dataset_type": "BINARY_FOOTBALL",
     # }
     dataset_metadata = {
-        "data_root": "/media/manos/hdd/allea_datasets/weedDataset/original_cropped",
+        "data_root": "/home/manos/data/weedDataset/original_dataset",
         "classes": [],
         "dataset_type": "",
     }
