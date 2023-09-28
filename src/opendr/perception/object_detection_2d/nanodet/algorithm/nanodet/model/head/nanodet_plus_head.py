@@ -75,8 +75,9 @@ class NanoDetPlusHead(nn.Module):
         self.reg_max = reg_max
         self.activation = activation
         self.ConvModule = DepthwiseConvModule if use_depthwise else ConvModule
-        for idx in range(len(strides)):
-            self.register_buffer(f"center_priors_{idx}", torch.empty(0))
+        self.center_priors = [torch.empty(0) for _ in range(len(strides))]
+        # for idx in range(len(strides)):
+        #     self.register_buffer(f"center_priors_{idx}", torch.empty(0))
 
         self.loss_cfg = loss
         self.norm_cfg = norm_cfg #None
@@ -149,6 +150,12 @@ class NanoDetPlusHead(nn.Module):
         for i in range(len(self.strides)):
             normal_init(self.gfl_cls[i], std=0.01, bias=bias_cls)
         print("Finish initialize NanoDet-Plus Head.")
+
+    def _apply(self, fn):
+        # Apply to(), cpu(), cuda(), half() to model tensors that are not parameters or registered buffers
+        self = super()._apply(fn)
+        self.center_priors = list(map(fn, self.center_priors))
+        return self
 
     @torch.jit.unused
     def forward(self, feats: List[Tensor]):
