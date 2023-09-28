@@ -19,7 +19,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.modul
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.init_weights import normal_init
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.nms import multiclass_nms
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.nms import multiclass_nms, batched_nms
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.assigner.dsl_assigner \
     import DynamicSoftLabelAssigner
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.gfl_head import Integral, reduce_mean
@@ -259,6 +259,7 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
                     bs, (ny, nx), self.strides[0], dtype=project.dtype, device=project.device
                 )
             )
+
         dis_preds = project * self.center_priors_0[..., 2, None]
         decoded_bboxes = distance2bbox(self.center_priors_0[..., :2], dis_preds)
         x1 = torch.cat((cls.sigmoid(), decoded_bboxes), dim=2)
@@ -480,7 +481,7 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
             pos_gt_bboxes = gt_bboxes[pos_assigned_gt_inds, :]
         return pos_inds, neg_inds, pos_gt_bboxes, pos_assigned_gt_inds
 
-    def post_process(self, preds, meta: Dict[str, Tensor], mode: str = "infer", conf_thresh: float = 0.05,
+    def post_process_old(self, preds, meta: Dict[str, Tensor], mode: str = "infer", conf_thresh: float = 0.3,
                      iou_thresh: float = 0.6, nms_max_num: int = 100):
         """Prediction results postprocessing. Decode bboxes and rescale
         to original image size.
@@ -529,6 +530,52 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
                         dim=1,
                     )
                     det_results.append(det)
+        return det_results
+
+    def post_process(self, preds, meta: Dict[str, Tensor], mode: str = "infer", conf_thresh: float = 0.3,
+                     iou_thresh: float = 0.6, nms_max_num: int = 100):
+        """Prediction results postprocessing. Decode bboxes and rescale
+        to original image size.
+        Args:
+            preds (Tensor): Prediction output.
+            meta (dict): Meta info.
+            mode (str): Determines if it uses batches and numpy or tensors for scripting.
+            conf_thresh (float): Determines the confidence threshold.
+            iou_thresh (float): Determines the iou threshold.
+            nms_max_num (int): Determines the maximum number of bounding boxes that will be retained following the nms.
+        """
+        if mode == "eval" and not torch.jit.is_scripting():
+            # Inference do not use batches and tries to have
+            # tensors exclusively for better optimization during scripting.
+            return self._eval_post_process(preds, meta)
+
+        max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
+
+        bs = preds.shape[0]
+        xc = (preds[..., :self.num_classes] > conf_thresh).any(dim=-1)
+        det_results = [torch.zeros((0, 6), device=preds.device, dtype=preds.dtype)] * bs
+        for i, (pred) in enumerate(preds):
+            valid_mask = xc[i]
+            pred = pred[valid_mask]
+            if not pred.shape[0]:
+                continue
+
+            max_scores, labels = torch.max(pred[:, :self.num_classes], dim=1)
+            keep = max_scores.argsort(descending=True)[:max_nms]
+            pred = pred[keep]  # sort by confidence and remove excess boxes
+            labels = labels[keep]
+            bboxes = pred[:, self.num_classes:]
+            cls_scores = max_scores[keep]
+            # cls_scores, bboxes = pred.split((self.num_classes, 4), dim=-1)
+
+            det_bboxes, keep = batched_nms(bboxes, cls_scores, labels, nms_cfg=dict(iou_threshold=iou_thresh, nms_max_num=float(nms_max_num)))
+            det_labels = labels[keep]
+            det_bboxes[:, :4] = scriptable_warp_boxes(
+                det_bboxes[:, :4],
+                torch.linalg.inv(meta["warp_matrix"][i]), meta["width"][i], meta["height"][i]
+            )
+            det = torch.cat((det_bboxes, det_labels[:, None]), dim=1)
+            det_results[i] = det
         return det_results
 
     def _eval_post_process(self, preds, meta):

@@ -1051,8 +1051,8 @@ class NanodetLearner(Learner):
             res = self.predictor.postprocessing(preds, _input, *metadata)
 
         bounding_boxes = []
-        for cls in res:
-            for box in cls:
+        for img in res:
+            for box in img:
                 box = box.to("cpu")
                 bbox = BoundingBox(left=box[0], top=box[1],
                                    width=box[2] - box[0],

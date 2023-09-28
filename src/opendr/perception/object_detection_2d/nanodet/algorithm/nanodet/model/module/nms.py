@@ -61,11 +61,8 @@ def multiclass_nms(
         labels = multi_bboxes.new_zeros((0,), dtype=torch.long)
         return bboxes, labels
 
+    nms_cfg["nms_max_number"] = float(max_num)
     dets, keep = batched_nms(bboxes, scores, labels, nms_cfg)
-
-    if max_num > 0:
-        dets = dets[:max_num]
-        keep = keep[:max_num]
 
     return dets, labels[keep]
 
@@ -85,6 +82,8 @@ def batched_nms(boxes, scores, idxs, nms_cfg: Dict[str, float], class_agnostic: 
             shape (N, ).
         nms_cfg (dict): specify nms type and other parameters like iou_thr.
             Possible keys includes the following.
+            - nms_max_number (float): int): if there are more than max_num bboxes after NMS,
+            only top max_num will be kept.
             - iou_thr (float): IoU threshold used for NMS.
             - split_thr (float): threshold number of boxes. In some cases the
                 number of boxes is large (e.g., 200k). To avoid OOM during
@@ -129,4 +128,10 @@ def batched_nms(boxes, scores, idxs, nms_cfg: Dict[str, float], class_agnostic: 
         boxes = boxes[keep]
         scores = scores[keep]
 
-    return torch.cat([boxes, scores[:, None]], -1), keep
+    dets = torch.cat([boxes, scores[:, None]], -1)
+    max_num = int(nms_cfg_.pop("nms_max_number", 100.0))
+    if max_num > 0:
+        dets = dets[:max_num]
+        keep = keep[:max_num]
+
+    return dets, keep
