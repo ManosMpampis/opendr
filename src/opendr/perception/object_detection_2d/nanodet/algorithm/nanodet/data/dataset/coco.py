@@ -170,6 +170,11 @@ class CocoDataset(BaseDataset):
         meta = self.pipeline(self, meta, input_size)
 
         meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1))
+        for key, value in meta.items():
+            if key in ["idx", "width", "height"]:
+                meta[key] = torch.tensor(value)
+            if key in ["warp_matrix"]:
+                meta[key] = torch.from_numpy(value)
         return meta
 
     def get_val_data(self, idx):

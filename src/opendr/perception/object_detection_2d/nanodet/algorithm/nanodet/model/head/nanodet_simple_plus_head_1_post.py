@@ -417,11 +417,12 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         """
 
         num_priors = center_priors.size(0)
-        device = center_priors.device
-        gt_bboxes = torch.from_numpy(gt_bboxes).to(device)
-        gt_labels = torch.from_numpy(gt_labels).to(device)
+        device = cls_preds.device
+        dtype = cls_preds.dtype
+        gt_bboxes = torch.from_numpy(gt_bboxes).to(device, dtype)
+        gt_labels = torch.from_numpy(gt_labels).to(device, dtype)
         num_gts = gt_labels.size(0)
-        gt_bboxes = gt_bboxes.to(decoded_bboxes.dtype)
+        gt_bboxes = gt_bboxes.to(dtype)
 
         bbox_targets = torch.zeros_like(center_priors)
         dist_targets = torch.zeros_like(center_priors)
@@ -552,7 +553,7 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
 
         bs = preds.shape[0]
-        xc = (preds[..., :self.num_classes] > conf_thresh).any(dim=-1)
+        xc = (preds[..., :self.num_classes].sigmoid() > conf_thresh).any(dim=-1)
         det_results = [torch.zeros((0, 6), device=preds.device, dtype=preds.dtype)] * bs
         for i, (pred) in enumerate(preds):
             valid_mask = xc[i]
@@ -560,7 +561,7 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
             if not pred.shape[0]:
                 continue
 
-            max_scores, labels = torch.max(pred[:, :self.num_classes], dim=1)
+            max_scores, labels = torch.max(pred[:, :self.num_classes].sigmoid(), dim=1)
             keep = max_scores.argsort(descending=True)[:max_nms]
             pred = pred[keep]  # sort by confidence and remove excess boxes
             labels = labels[keep]
@@ -580,38 +581,34 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
 
     def _eval_post_process(self, preds, meta):
         # TODO: get_bboxes must run in loop and can be used only tensors for better performance
-        cls_scores, _, bbox_preds = preds.split(
-            [self.num_classes, 4 * (self.reg_max + 1), 4], dim=-1
-        )
-        result_list = self.get_bboxes(cls_scores, bbox_preds)
+        max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
+        conf_thresh = 0.05
+        iou_thresh = 0.6
+        nms_max_num = 100
+        xc = (preds[..., :self.num_classes].sigmoid() > conf_thresh).any(dim=-1)
         det_results = {}
-        warp_matrixes = meta["warp_matrix"]
-        img_heights = (
-            meta["height"].cpu().numpy()
-            if isinstance(meta["height"], torch.Tensor)
-            else meta["height"]
-        )
-        img_widths = (
-            meta["width"].cpu().numpy()
-            if isinstance(meta["width"], torch.Tensor)
-            else meta["width"]
-        )
-        img_ids = (
-            meta["id"].cpu().numpy()
-            if isinstance(meta["id"], torch.Tensor)
-            else meta["id"]
-        )
-
-        for result, img_width, img_height, img_id, warp_matrix in zip(
-                result_list, img_widths, img_heights, img_ids, warp_matrixes
-        ):
-            det_result = {}
-            det_bboxes, det_labels = result
-            det_bboxes = det_bboxes.detach().cpu().numpy()
-            det_bboxes[:, :4] = warp_boxes(
-                det_bboxes[:, :4], np.linalg.inv(warp_matrix), img_width, img_height
+        for i, (pred) in enumerate(preds):
+            valid_mask = xc[i]
+            pred = pred[valid_mask]
+            if not pred.shape[0]:
+                continue
+            max_scores, labels = torch.max(pred[:, :self.num_classes].sigmoid(), dim=1)
+            keep = max_scores.argsort(descending=True)[:max_nms]
+            pred = pred[keep]  # sort by confidence and remove excess boxes
+            labels = labels[keep]
+            bboxes = pred[:, -4:]
+            cls_scores = max_scores[keep]
+            #     # cls_scores, bboxes = pred.split((self.num_classes, 4), dim=-1)
+            det_bboxes, keep = batched_nms(bboxes, cls_scores, labels,
+                                           nms_cfg=dict(iou_threshold=iou_thresh, nms_max_num=float(nms_max_num)))
+            det_labels = labels[keep]
+            det_bboxes[:, :4] = scriptable_warp_boxes(
+                det_bboxes[:, :4],
+                torch.linalg.inv(meta["warp_matrix"][i]), meta["width"][i], meta["height"][i]
             )
             classes = det_labels.detach().cpu().numpy()
+            det_bboxes = det_bboxes.detach().cpu().numpy()
+            det_result = {}
             for i in range(self.num_classes):
                 inds = classes == i
                 det_result[i] = np.concatenate(
@@ -621,7 +618,7 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
                     ],
                     axis=1,
                 ).tolist()
-            det_results[img_id] = det_result
+            det_results[meta["id"][i]] = det_result
         return det_results
 
     def get_bboxes(self, cls_preds, bboxes, conf_threshold: float = 0.05,
