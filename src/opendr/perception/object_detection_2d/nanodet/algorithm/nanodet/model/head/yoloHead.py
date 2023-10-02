@@ -136,6 +136,8 @@ class YoloHead(nn.Module):
         return grid, anchor_grid
 
     def loss(self, preds, gt_meta):
+        #TODO: FIND LOSS AND ASSIGNER
+
         # loss, loss_items = compute_loss(pred, targets.to(device))
 
         loss, loss_items = self.loss_fn(preds, )

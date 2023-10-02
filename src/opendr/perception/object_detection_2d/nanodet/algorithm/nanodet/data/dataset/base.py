@@ -202,7 +202,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         meta = self.get_per_img_info(i)
         f = Path(os.path.join(self.img_path, "npys", meta["file_name"])).with_suffix(".npy")
         if not f.exists():
-            mkdir(-1, os.path.join(self.img_path, "npys"))
+            mkdir(-1, os.path.join(self.img_path, "npys"), exist_ok=True)
             meta = self.get_data(i)
             np.save(f.as_posix(), meta["img"])
         self.npy_files[i] = f

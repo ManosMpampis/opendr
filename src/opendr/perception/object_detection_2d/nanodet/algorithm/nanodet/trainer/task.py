@@ -102,14 +102,14 @@ class TrainingTask(LightningModule):
         batch = self._preprocess_batch_input(batch)
         preds, loss, loss_states = self.model.forward_train(batch)
 
-        if self.qat:
-            if (self.global_step + 1) > self.cfg.qat.freeze_quantizer_parameters:
-                self.model.apply(torch.quantization.disable_observer)
-            if (self.global_step + 1) > self.cfg.qat.freeze_bn:
-                self.model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
+        # if self.qat:
+        #     if (self.global_step + 1) > self.cfg.qat.freeze_quantizer_parameters:
+        #         self.model.apply(torch.quantization.disable_observer)
+        #     if (self.global_step + 1) > self.cfg.qat.freeze_bn:
+        #         self.model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
 
         # log train losses
-        if (self.global_step + 1) % self.cfg.log.interval == 0:
+        if (self.global_step + 1) % self.cfg.log.interval == 0 or self.global_step == self.trainer.num_training_batches:
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
             lr = self.trainer.optimizers[0].param_groups[0]["lr"]
             log_msg = "Train|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
@@ -166,17 +166,17 @@ class TrainingTask(LightningModule):
         for loss_name in loss_states:
             self.val_losses[loss_name] += loss_states[loss_name].mean().item()
 
-        if batch_idx % self.cfg.log.interval == 0:
-            memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
-            log_msg = "Val|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| ".format(
-                self.current_epoch,
-                self.cfg.schedule.total_epochs,
-                (self.current_epoch + 1) * batch_idx,
-                batch_idx,
-                sum(self.trainer.num_val_batches),
-                memory,
-            )
-            self.info(log_msg)
+        # if batch_idx % self.cfg.log.interval == 0:
+        #     memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
+        #     log_msg = "Val|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| ".format(
+        #         self.current_epoch,
+        #         self.cfg.schedule.total_epochs,
+        #         (self.current_epoch + 1) * batch_idx,
+        #         batch_idx,
+        #         sum(self.trainer.num_val_batches),
+        #         memory,
+        #     )
+        #     self.info(log_msg)
 
         if (batch_idx + 1) == sum(self.trainer.num_val_batches):
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
