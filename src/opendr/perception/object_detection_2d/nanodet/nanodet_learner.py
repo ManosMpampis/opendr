@@ -151,7 +151,7 @@ class NanodetLearner(Learner):
         for root, dir, files in os.walk(path):
             if wanted_file in files:
                 full_path.append(os.path.join(root, wanted_file))
-        assert (len(full_path) == 1), f"You must have only one nanodet_{model}.yaml file in your config folder"
+        assert (len(full_path) == 1), f"You must have only one nanodet_{model}.yaml file in your config folder but found {len(full_path)}"
         load_config(cfg, full_path[0])
         return cfg
 
@@ -416,13 +416,17 @@ class NanodetLearner(Learner):
         )
         return dummy_input
 
-    def __cv_dumy_input(self, hf=False):
+    def __cv_dumy_input(self, hf=False, zeros=True):
         try:
             width, height = self.cfg.data.bench_test.input_size
         except AttributeError as e:
             self.info(f"{e}, not bench_est.input_size int yaml file, val will be used instead")
             width, height = self.cfg.data.val.input_size
-        return torch.zeros((width, height, 3), device="cpu", dtype=torch.half if hf else torch.float32).numpy()
+        if zeros:
+            output = torch.zeros((width, height, 3), device="cpu", dtype=torch.half if hf else torch.float32).numpy()
+        else:
+            output = torch.rand((width, height, 3), device="cpu", dtype=torch.half if hf else torch.float32).numpy()
+        return output
 
     def _save_onnx(self, onnx_path, predictor, do_constant_folding=False, verbose=True, dynamic=True):
 
@@ -573,8 +577,7 @@ class NanodetLearner(Learner):
             ],
             "framework": "pytorch", "format": "tensorRT", "has_data": False, "optimized": True, "optimizer_info": {},
             "inference_params": {"input_size": self.cfg.data.val.input_size, "classes": self.classes,
-                                 "num_classes": len(self.classes), "reg_max": self.cfg.model.arch.head.reg_max,
-                                 "strides": self.cfg.model.arch.head.strides}, "hf": predictor.hf}
+                                 "num_classes": len(self.classes)}, "hf": predictor.hf}
 
         with open(export_path_json, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
@@ -746,6 +749,7 @@ class NanodetLearner(Learner):
             self.batch_size = ((self.batch_size + 32 - 1) // 32) * 32
 
         nbs = self.cfg.schedule.effective_batchsize  # nominal batch size
+        nbs = max(nbs, 1)
         accumulate = 1
         if nbs > 1:
             accumulate = max(math.ceil(nbs / self.batch_size), 1)
@@ -753,6 +757,10 @@ class NanodetLearner(Learner):
             self.logger.info(f"After calculate accumulation\n"
                              f"Batch size will be: {self.batch_size}\n"
                              f"With accumulation: {accumulate}.")
+
+        self.cfg.defrost()
+        self.cfg.schedule.optimizer.weight_decay *= self.batch_size * accumulate / nbs  # scale weight_decay
+        self.cfg.freeze()
 
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset,
@@ -1065,7 +1073,8 @@ class NanodetLearner(Learner):
 
         return bounding_boxes
 
-    def benchmark(self, repetitions=1000, warmup=100, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100, hf=False, ch_l=False, fuse=False, dataset=None):
+    def benchmark(self, repetitions=1000, warmup=100, conf_threshold=0.35, iou_threshold=0.6, nms_max_num=100,
+                  hf=False, ch_l=False, fuse=False, dataset=None, zeros=True):
         """
         Performs inference
         :param repetitions: input image to perform inference on
@@ -1271,7 +1280,7 @@ class NanodetLearner(Learner):
             fps_onnx_infer_post_timings = 1/(mean_onnx_infer_timings + mean_post_timings)
 
         # Print measurements
-        print(f"\n\nMeasure of model: {self.cfg.check_point_name} \nHalf precision: {hf}\nFuse Convs: {fuse}\nChannel last: {ch_l}")
+        print(f"\n\nMeasure of model: {self.cfg.check_point_name} \nHalf precision: {hf}\nFuse Convs: {fuse}\nChannel last: {ch_l}\nData: {'zeros' if zeros else 'rand'}")
         print(f"\n=== Python measurements === \n"
               f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
               f"infer          fps = {fps_infer_timings} evn/s\n"#)
@@ -1474,7 +1483,7 @@ class NanodetLearner(Learner):
                 _preds, trt_infer_time = profile(_input, self.trt_model, sing_inputs=True)
                 trt_infer_timings.append(trt_infer_time)
 
-                _out, trt_post_time = profile((_preds, _input, *_metadata), self.jit_postprocessing, sing_inputs=False)
+                _out, trt_post_time = profile((_preds, _input, *_metadata), self.predictor.postprocessing, sing_inputs=False)
                 trt_post_timings.append(trt_post_time)
         trt_infer_timings = np.array(trt_infer_timings)
         trt_post_timings = np.array(trt_post_timings)
@@ -1558,7 +1567,7 @@ class NanodetLearner(Learner):
             fps_onnx_full_run_timings = 1 / mean_onnx_full_run_timings
 
         # Print measurements
-        print(f"\n\nMeasure of model: {self.cfg.check_point_name} \nHalf precision: {hf}\nFuse Convs: {fuse}\nChannel last: {ch_l}")
+        print(f"\n\nMeasure of model: {self.cfg.check_point_name} \nHalf precision: {hf}\nFuse Convs: {fuse}\nChannel last: {ch_l}\nData: Dataset")
         print(f"\n=== Python measurements === \n"
               f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
               f"infer          fps = {fps_infer_timings} evn/s\n"
