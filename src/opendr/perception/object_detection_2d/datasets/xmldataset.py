@@ -129,7 +129,7 @@ if __name__ == '__main__':
     # }
     dataset_metadata = {
         "data_root": "/home/manos/data/weedDataset/original_dataset",
-        "classes": [],
+        "classes": ["poaceae", "brassicaceae"],
         "dataset_type": "",
     }
     data_root = dataset_metadata["data_root"]
@@ -138,9 +138,10 @@ if __name__ == '__main__':
     dataset = XMLBasedDataset(root=f'{data_root}/test', dataset_type=dataset_type, images_dir='images',
                               annotations_dir='annotations', classes=classes)
 
-    dataset2 = XMLBasedDataset(root=f'/home/manos/data/weedDataset/small_annots/big_annots/test', dataset_type=dataset_type, images_dir='images',
-                              annotations_dir='annotations', classes=classes)
-    for i, ((img, targets), (img2, targets2)) in enumerate(zip(dataset, dataset2)):
+    dataset = XMLBasedDataset(root=f'/home/manos/data/weedDataset/small_annots/big_annots/test', dataset_type=dataset_type, images_dir='images',
+                              annotations_dir='../../../original_dataset/test/annotations', classes=classes)
+    # for i, ((img, targets), (img2, targets2)) in enumerate(zip(dataset, dataset2)):
+    for i, (img, targets) in enumerate(dataset):
         sum = 0
         final_targets = []
         for target in targets:
@@ -157,15 +158,17 @@ if __name__ == '__main__':
             print(f"found in: {dataset.image_paths[i]}")
         # continue
 
-        print(dataset.image_paths[i])
-        img2 = img2.opencv()
-        img2 = draw_bounding_boxes(img2, targets2, class_names=dataset2.classes)
-        img2 = cv2.resize(img2, dsize=None, fx=0.3, fy=0.3)
-        cv2.imshow('img2', img2)
+        if dataset.image_paths[i] in ["af7889ab6b42b57d7e34.jpg"]:
+            print(dataset.image_paths[i])
+            # img2 = img2.opencv()
+            # img2 = draw_bounding_boxes(img2, targets2, class_names=dataset2.classes)
+            # img2 = cv2.resize(img2, dsize=None, fx=0.3, fy=0.3)
+            # cv2.imshow('img2', img2)
 
-        img = img.opencv()
-        img = draw_bounding_boxes(img, final_targets, class_names=dataset.classes)
-        img = cv2.resize(img, dsize=None, fx=0.3, fy=0.3)
-        cv2.imshow('img', img)
-        cv2.waitKey(0)
-    cv2.destroyAllWindows()
+            img = img.opencv()
+            img = draw_bounding_boxes(img, final_targets, class_names=dataset.classes)
+            # img = cv2.resize(img, dsize=None, fx=0.3, fy=0.3)
+            cv2.imshow('img', img)
+            cv2.imwrite(f"/home/manos/Pictures/roobweeddataset/blacked_small_annot_example.png", img)
+            cv2.waitKey(0)
+        cv2.destroyAllWindows()

@@ -102,14 +102,19 @@ class TrainingTask(LightningModule):
         batch = self._preprocess_batch_input(batch)
         preds, loss, loss_states = self.model.forward_train(batch)
 
-        # if self.qat:
-        #     if (self.global_step + 1) > self.cfg.qat.freeze_quantizer_parameters:
-        #         self.model.apply(torch.quantization.disable_observer)
-        #     if (self.global_step + 1) > self.cfg.qat.freeze_bn:
-        #         self.model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
+        # zero all losses
+        if batch_idx == 0:
+            self.train_losses = {}
+            for loss_name in loss_states:
+                if not (loss_name in self.train_losses):
+                    self.train_losses[loss_name] = 0
+        # update losses
+        for loss_name in loss_states:
+            self.train_losses[loss_name] += loss_states[loss_name].mean().item()
 
         # log train losses
-        if (self.global_step + 1) % self.cfg.log.interval == 0 or self.global_step == self.trainer.num_training_batches:
+        # if (self.global_step + 1) % self.cfg.log.interval == 0 or batch_idx == self.trainer.num_training_batches:
+        if batch_idx+1 == self.trainer.num_training_batches:
             memory = (torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0)
             lr = self.trainer.optimizers[0].param_groups[0]["lr"]
             log_msg = "Train|Epoch{}/{}|Iter{}({}/{})| mem:{:.3g}G| lr:{:.2e}| ".format(
@@ -123,13 +128,13 @@ class TrainingTask(LightningModule):
             )
             self.scalar_summary("Experimen_Variables/Learning Rate", lr, (self.global_step + 1))
             self.scalar_summary("Experimen_Variables/Epoch", self.current_epoch, (self.global_step + 1))
-            for loss_name in loss_states:
+            for loss_name in self.train_losses:
                 log_msg += "{}:{:.4f}| ".format(
                     loss_name, loss_states[loss_name].mean().item()
                 )
                 self.scalar_summary(
                     "Train_loss/" + loss_name,
-                    loss_states[loss_name].mean().item(),
+                    self.train_losses[loss_name] / (batch_idx + 1), #.mean().item(),
                     (self.global_step+1),
                 )
             self.info(log_msg)

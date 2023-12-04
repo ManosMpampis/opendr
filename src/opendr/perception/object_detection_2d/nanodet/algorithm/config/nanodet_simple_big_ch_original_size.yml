@@ -1,8 +1,6 @@
 #Config File example
-#save_dir: ./temp/simple_big_ch_very_small_annots #_OLD #simple_big_ch_very_small_annots_1_6
-#check_point_name: simple_big_ch_very_small_annots #_OLD #simple_big_ch_very_small_annots_1_6
-save_dir: ./temp/simple_big_ch_very_small_annots_1_6
-check_point_name: simple_big_ch_very_small_annots_1_6
+save_dir: ./temp/simple_big_ch #_2_5
+check_point_name: simple_big_ch #_2_5
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -66,7 +64,7 @@ model:
       reg_max: 7
 data:
   train:
-    input_size: [1536, 1312] #[208, 208] #[w,h]
+    input_size: [1312, 1536] #[208, 208] #[w,h]
     keep_ratio: False
     cache_images: disk
     pipeline:
@@ -83,26 +81,26 @@ data:
       brightness: 0.2
       contrast: [0.8, 1.2]
       saturation: [0.8, 1.1]
-#      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
+      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
+#      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # full annots
   val:
-    input_size: [1536, 1312] #[1536, 1312] #[2456, 2054] #[640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
+    input_size: [1312, 1536] #[2456, 2054] #[640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
     cache_images: disk
     pipeline:
       perspective: 0.0
-#      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
+      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
+#      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # full annots
   bench_test:
-    input_size: [1536, 1312] #[2456, 2054] #[1536, 1312] #[1920, 1088] [2456, 2054]
+    input_size: [2456, 2054] #[1920, 1088] [2456, 2054]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-#      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
+      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
+#      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # full annots
 device:
   gpu_ids: [0]
-  workers_per_gpu: 4
+  workers_per_gpu: 8
   batchsize_per_gpu: 1
   precision: 32
 schedule:
@@ -132,6 +130,6 @@ evaluator:
   name: CocoDetectionEvaluator
   save_key: mAP
 log:
-  interval: 300
+  interval: 100
 
 class_names: ["poaceae", "brassicaceae"]

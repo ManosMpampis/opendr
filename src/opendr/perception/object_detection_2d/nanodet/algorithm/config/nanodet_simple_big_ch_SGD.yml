@@ -1,8 +1,6 @@
 #Config File example
-#save_dir: ./temp/simple_big_ch_very_small_annots #_OLD #simple_big_ch_very_small_annots_1_6
-#check_point_name: simple_big_ch_very_small_annots #_OLD #simple_big_ch_very_small_annots_1_6
-save_dir: ./temp/simple_big_ch_very_small_annots_1_6
-check_point_name: simple_big_ch_very_small_annots_1_6
+save_dir: ./temp/simple_big_ch_very_small_annots_big_1_6_orgLR_blacked
+check_point_name: simple_big_ch_very_small_annots_big_1_6_orgLR_blacked
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -47,13 +45,13 @@ model:
           name: QualityFocalLoss
           use_sigmoid: True
           beta: 2.0
-          loss_weight: 1.0
+          loss_weight: 2.0  #3/2
         loss_dfl:
           name: DistributionFocalLoss
-          loss_weight: 0.25
+          loss_weight: 0.25 #3/2
         loss_bbox:
           name: GIoULoss
-          loss_weight: 2.0
+          loss_weight: 2.0 #3/2
     # Auxiliary head, only use in training time.
     aux_head:
       name: SimpleConvHead
@@ -83,23 +81,23 @@ data:
       brightness: 0.2
       contrast: [0.8, 1.2]
       saturation: [0.8, 1.1]
-#      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
+      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
+#      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
   val:
-    input_size: [1536, 1312] #[1536, 1312] #[2456, 2054] #[640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
+    input_size: [1536, 1312] #[2456, 2054] #[640, 640] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
     keep_ratio: False
     cache_images: disk
     pipeline:
       perspective: 0.0
-#      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
+      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
+#      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
   bench_test:
-    input_size: [1536, 1312] #[2456, 2054] #[1536, 1312] #[1920, 1088] [2456, 2054]
+    input_size: [1536, 1312] #[1920, 1088] [2456, 2054]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-#      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
-      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
+      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
+#      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # big images
 device:
   gpu_ids: [0]
   workers_per_gpu: 4
@@ -110,21 +108,23 @@ schedule:
   optimizer:
     name: AdamW
     lr: 0.005
-    weight_decay: 0.05
+#    momentum: 0.9
+    weight_decay: 0.0005
+    #nesterov: True
   warmup:
     name: linear
     steps: 500
     ratio: 0.0001
-  total_epochs: 300
+  total_epochs: 4000
   lr_schedule:
-    name: CosineAnnealingWarmRestarts
-    T_0: 10
-    T_mult: 2
-    eta_min: 0.00005
-    last_epoch: -1
-#    name: CosineAnnealingLR
-#    T_max: 300
+#    name: CosineAnnealingWarmRestarts
+#    T_0: 10
+#    T_mult: 2
 #    eta_min: 0.00005
+#    last_epoch: -1
+    name: CosineAnnealingLR
+    T_max: 4000
+    eta_min: 0.00005
   val_intervals: 1
   effective_batchsize: 64
 grad_clip: 35

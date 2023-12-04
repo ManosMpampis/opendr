@@ -1,16 +1,15 @@
 #Config File example
-save_dir: ./temp/augmented_data_bigger_pos
-check_point_name: augmented_data_bigger_pos
+save_dir: ./temp/plus_augmented_data_bigger_pos_with_augmentations #augmented_data_bigger_pos
+check_point_name: plus_augmented_data_bigger_pos_with_augmentations #augmented_data_bigger_pos
 model:
   arch:
-    weight_averager:
-      name: ExpMovingAverager
-      decay: 0.9998
+#    weight_averager:
+#      name: ExpMovingAverager
+#      decay: 0.9998
     name: OneStageDetector
     backbone:
-      name: SmallVgg
-      out_stages: [3, 4]
-      stages_inplanes:  [3, 8, 8, 6]
+      name: Vgg
+      out_stages: [2, 3]
       stages_outplanes: [8, 8, 6, 6]
       stages_strides:   [2, 2, 1, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
       maxpool_after:    [0, 0, 0, 0]
@@ -54,14 +53,24 @@ model:
         loss_bbox:
           name: GIoULoss
           loss_weight: 2.0
+    # Auxiliary head, only use in training time.
+#    aux_head:
+#      name: SimpleConvHead
+#      num_classes: 1
+#      input_channel: 12
+#      feat_channels: 12
+#      stacked_convs: 2
+#      strides: [4, 8]
+#      activation: LeakyReLU
+#      reg_max: 7
 data:
   train:
     input_size: [192, 192] #[w,h]
     keep_ratio: False
     pipeline:
       perspective: 0.0
-      scale: [1.0, 1.0]
-      stretch: [[1.0, 1.0], [1.0, 1.0]]
+      scale: [ 0.9, 1.1 ]
+      stretch: [ [ 0.9, 1.1 ], [ 0.9, 1.1 ] ]
       rotation: 0
       shear: 0
       translate: 0.0
@@ -69,9 +78,9 @@ data:
       jitter_box: 0.1
       hard_pos: 0.0
       hard_pos_ratio: 0.0
-      brightness: 1.0
-      contrast: [1.0, 1.0]
-      saturation: [1.0, 1.0]
+      brightness: 0.2
+      contrast: [ 0.6, 1.4 ]
+      saturation: [ 0.5, 1.2 ]
       normalize: [[123.37, 120.76, 85.17], [53.46, 51.62, 53.99]]
   val:
     input_size: [192, 192] #[192, 192] #[96, 96] #[1920, 1088] #[w,h]
@@ -95,7 +104,7 @@ schedule:
   optimizer:
     name: SGD
     lr: 0.01
-    momentum: 0.99
+    momentum: 0.9
     weight_decay: 0.05
   warmup:
     name: linear
@@ -104,7 +113,7 @@ schedule:
   total_epochs: 100
   lr_schedule:
     name: CosineAnnealingLR
-    T_max: 400
+    T_max: 300
     eta_min: 0.00005
     last_epoch: -1
   val_intervals: 2

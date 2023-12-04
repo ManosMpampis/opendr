@@ -106,7 +106,10 @@ def draw_detections(img, boxes, scores, classes, class_names=None, show=False, l
         cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
 
         if class_names is not None:
-            label = "{}: {:.2f}".format(class_names[classes[idx]], float(score))
+            if float(score) > 0:
+                label = "{}: {:.2f}".format(class_names[classes[idx]], float(score))
+            else:
+                label = "{}".format(class_names[classes[idx]])
 
             t_size = cv2.getTextSize(
                 label, 0, fontScale=float(tl) / 3, thickness=1)[0]
