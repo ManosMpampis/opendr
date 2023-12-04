@@ -40,9 +40,11 @@ class YoloHead(nn.Module):
         depth_multiple = self.YoloArch[arch]["depth_multiple"]
         wm = Wm(width_multiple)
         input_channels = [wm(256), wm(512), wm(1024)]
+        input_dim = [32, 16, 8]
+
         if isinstance(anchors, int):
             anchors = [list(range(anchors * 2))] * len(input_channels)
-
+        self.reg_max = 0
         self.nc = num_classes  # number of classes
         self.no = num_classes + 5  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
@@ -65,10 +67,11 @@ class YoloHead(nn.Module):
             "cls": self.loss_cfg.cls * ((self.nc / 80) * (3 / self.nl)),
         }
         autobalance = ...
-        self.loss_fn = YoloLoss("cuda", hyperparameters, self, autobalance)
-        self.input_smple = ...
+        # self.loss_fn = YoloLoss("cuda", hyperparameters, self, autobalance)
+        self.input_sample = [torch.zeros(1, in_ch, w, h) for in_ch, w, h in zip(input_channels, input_dim, input_dim)]
         self.build_strides_anchors()
 
+    @torch.jit.unused
     def forward(self, x):
         for i in range(self.nl):
             x[i] = self.m[i](x[i])  # conv
@@ -87,21 +90,19 @@ class YoloHead(nn.Module):
                 if self.dynamic or self.grid[i].shape[2:4] != x[i].shape[2:4]:
                     self.grid[i], self.anchor_grid[i] = self._make_grid(nx, ny, i)
 
-                else:  # Detect (boxes only)
-                    xy, wh, conf = x[i].sigmoid().split((2, 2, self.nc + 1), 4)
-                    xy = (xy * 2 + self.grid[i]) * self.stride[i]  # xy
-                    wh = (wh * 2) ** 2 * self.anchor_grid[i]  # wh
-                    y = torch.cat((xy, wh, conf), 4)
+                xy, wh, conf = x[i].sigmoid().split((2, 2, self.nc + 1), 4)
+                xy = (xy * 2 + self.grid[i]) * self.stride[i]  # xy
+                wh = (wh * 2) ** 2 * self.anchor_grid[i]  # wh
+                y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, self.na * nx * ny, self.no))
 
-        return (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
+        return torch.cat(z, 1)
 
     def build_strides_anchors(self):
         s = 256  # 2x min stride
-        self.stride = torch.tensor([s / x.shape[-2] for x in self(torch.zeros(self.input_smple))])  # forward
+        self.stride = torch.tensor([s / x.shape[-2] for x in self(self.input_sample)])  # forward
         self.check_anchor_order()
         self.anchors /= self.stride.view(-1, 1, 1)
-        self.stride = self.stride
         self._initialize_biases()  # only run once
 
     def _initialize_biases(self, cf=None):  # initialize biases into Detect(), cf is class frequency
@@ -145,3 +146,7 @@ class YoloHead(nn.Module):
         loss = ...
         loss_states = ...
         return loss, loss_states
+
+    def post_process(self, preds, meta: Dict[str, Tensor], mode: str = "infer", conf_thresh: float = 0.05,
+                     iou_thresh: float = 0.6, nms_max_num: int = 100):
+        return preds

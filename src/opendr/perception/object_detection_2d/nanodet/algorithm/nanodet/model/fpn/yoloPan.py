@@ -64,12 +64,12 @@ class YoloPan(nn.Module):
 
         # build top-down blocks
         self.layer_10 = Conv(wm(1024), wm(512), 1, 1, act=act_layers(activation))
-        self.layer_11 = nn.Upsample(**upsample_cfg, align_corners=False)
+        self.layer_11 = nn.Upsample(**upsample_cfg, align_corners=False if upsample_cfg["mode"] != "nearest" else None)
         self.layer_12 = Concat(1)
         self.layer_13 = C3(wm(1024), wm(512), dm(3), False)
 
         self.layer_14 = Conv(wm(512), wm(256), 1, 1, act=act_layers(activation))
-        self.layer_15 = nn.Upsample(**upsample_cfg, align_corners=False)
+        self.layer_15 = nn.Upsample(**upsample_cfg, align_corners=False if upsample_cfg["mode"] != "nearest" else None)
         self.layer_16 = Concat(1)
         self.layer_17 = C3(wm(512), wm(256), dm(3), False)
 
@@ -88,9 +88,9 @@ class YoloPan(nn.Module):
 
     @torch.jit.unused
     def forward(self, inputs):
-        x = self.layer_10(inputs[-1])
-        x_10 = self.layer_11(x)
-        x = self.layer_12([x_10, inputs[-2]])
+        x_10 = self.layer_10(inputs[-1])
+        x = self.layer_11(x_10)
+        x = self.layer_12([x, inputs[-2]])
         x = self.layer_13(x)
 
         x_14 = self.layer_14(x)
@@ -104,7 +104,8 @@ class YoloPan(nn.Module):
 
         x = self.layer_21(x_20)
         x = self.layer_22([x, x_10])
-        return x_17, x_20, self.layer_23(x)
+        out = [x_17, x_20, self.layer_23(x)]
+        return out
 
 
 if __name__ == '__main__':

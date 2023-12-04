@@ -1,6 +1,6 @@
 #Config File example
-save_dir: ./temp/yolo_original
-check_point_name: yolo_original
+save_dir: ./temp/yolo_3
+check_point_name: yolo_3
 model:
   weight_averager:
     name: ExpMovingAverager
@@ -69,7 +69,7 @@ data:
 #      normalize: [[103.71, 108.77, 105.6], [31.51, 28.67, 27.91]]  # very small annots
 #      normalize: [[98.45438741, 104.10689567, 98.17277835], [34.79841708, 31.2228376, 29.66469302]]  # full annots
   bench_test:
-    input_size: [2456, 2054] #[1920, 1088] [2456, 2054]
+    input_size: [832, 704] #[1920, 1088] [2456, 2054]
     keep_ratio: False
     pipeline:
       perspective: 0.0

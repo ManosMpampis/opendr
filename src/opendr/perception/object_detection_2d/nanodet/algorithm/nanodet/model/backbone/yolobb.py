@@ -84,7 +84,7 @@ class Yolo(nn.Module):
         y = self.layer_6(x)
         x = self.layer_7(y)
         x = self.layer_8(x)
-        return k, y, self.conv_9(x)
+        return k, y, self.layer_9(x)
 
 
 if __name__ == '__main__':
