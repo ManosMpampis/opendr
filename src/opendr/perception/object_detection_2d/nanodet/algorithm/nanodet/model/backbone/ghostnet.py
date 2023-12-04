@@ -83,14 +83,14 @@ class ConvBnAct(nn.Module):
     def __init__(self, in_chs, out_chs, kernel_size, stride=1, activation="ReLU"):
         super(ConvBnAct, self).__init__()
         self.conv = nn.Conv2d(
-            in_chs, out_chs, kernel_size, stride, kernel_size // 2, bias=False, #True, #False,
+            in_chs, out_chs, kernel_size, stride, kernel_size // 2, bias=False
         )
-        self.bn1 = nn.BatchNorm2d(out_chs) #
+        self.bn1 = nn.BatchNorm2d(out_chs)
         self.act1 = act_layers(activation)
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.bn1(x) #
+        x = self.bn1(x)
         x = self.act1(x)
         return x
 
@@ -106,9 +106,9 @@ class GhostModule(nn.Module):
 
         self.primary_conv = nn.Sequential(
             nn.Conv2d(
-                inp, init_channels, kernel_size, stride, kernel_size // 2, bias=False, #True, #False,
+                inp, init_channels, kernel_size, stride, kernel_size // 2, bias=False
             ),
-            nn.BatchNorm2d(init_channels), #
+            nn.BatchNorm2d(init_channels),
             act_layers(activation) if activation else nn.Sequential(),
         )
 
@@ -120,9 +120,9 @@ class GhostModule(nn.Module):
                 1,
                 dw_size // 2,
                 groups=init_channels,
-                bias=False, #True, #False,
+                bias=False,
             ),
-            nn.BatchNorm2d(new_channels), #
+            nn.BatchNorm2d(new_channels),
             act_layers(activation) if activation else nn.Sequential(),
         )
 
@@ -142,6 +142,7 @@ class GhostBottleneck(nn.Module):
         mid_chs,
         out_chs,
         dw_kernel_size=3,
+        kernel_size_shortcut=None,
         stride=1,
         activation="ReLU",
         se_ratio=0.0,
@@ -149,6 +150,7 @@ class GhostBottleneck(nn.Module):
         super(GhostBottleneck, self).__init__()
         has_se = se_ratio is not None and se_ratio > 0.0
         self.stride = stride
+        kernel_size_shortcut = dw_kernel_size if kernel_size_shortcut is None else kernel_size_shortcut
 
         # Point-wise expansion
         self.ghost1 = GhostModule(in_chs, mid_chs, activation=activation)
@@ -162,9 +164,12 @@ class GhostBottleneck(nn.Module):
                 stride=stride,
                 padding=(dw_kernel_size - 1) // 2,
                 groups=mid_chs,
-                bias=False #True, #False,
+                bias=False,
             )
-            self.bn_dw = nn.BatchNorm2d(mid_chs) #
+            self.bn_dw = nn.BatchNorm2d(mid_chs)
+        else:
+            self.conv_dw = nn.Identity()
+            self.bn_dw = nn.Identity()
 
         # Squeeze-and-excitation
         if has_se:
@@ -183,18 +188,17 @@ class GhostBottleneck(nn.Module):
                 nn.Conv2d(
                     in_chs,
                     in_chs,
-                    dw_kernel_size,
+                    kernel_size_shortcut,
                     stride=stride,
-                    padding=(dw_kernel_size - 1) // 2,
+                    padding=(kernel_size_shortcut - 1) // 2,
                     groups=in_chs,
-                    bias=False #True, #False,,
+                    bias=False,
                 ),
-                nn.BatchNorm2d(in_chs), #
-                nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False), #True,False),
-                nn.BatchNorm2d(out_chs), #
+                nn.BatchNorm2d(in_chs),
+                nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False),
+                nn.BatchNorm2d(out_chs),
             )
 
-    @torch.jit.unused
     def forward(self, x):
         residual = x
 
@@ -264,8 +268,8 @@ class GhostNet(nn.Module):
 
         # building first layer
         output_channel = _make_divisible(16 * width_mult, 4)
-        self.conv_stem = nn.Conv2d(3, output_channel, 3, 2, 1, bias=False) #True), #False,)
-        self.bn1 = nn.BatchNorm2d(output_channel) #
+        self.conv_stem = nn.Conv2d(3, output_channel, 3, 2, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(output_channel)
         self.act1 = act_layers(self.activation)
         input_channel = output_channel
 
@@ -304,10 +308,10 @@ class GhostNet(nn.Module):
 
     def forward(self, x):
         x = self.conv_stem(x)
-        x = self.bn1(x) #
+        x = self.bn1(x)
         x = self.act1(x)
         output = []
-        for i in range(10):
+        for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]:
             x = self.blocks[i](x)
             if i in self.out_stages:
                 output.append(x)

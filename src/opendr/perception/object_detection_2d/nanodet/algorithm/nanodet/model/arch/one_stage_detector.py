@@ -20,32 +20,6 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.fpn i
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head import build_head
 
 
-def _load_hparam(model: str):
-    from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import (load_config, cfg)
-    import os
-    from pathlib import Path
-
-    """ Load hyperparameters for nanodet models and training configuration
-
-    :parameter model: The name of the model of which we want to load the config file
-    :type model: str
-    :return: config with hyperparameters
-    :rtype: dict
-    """
-    # assert (
-    #         model in _MODEL_NAMES
-    # ), f"Invalid model selected. Choose one of {_MODEL_NAMES}."
-    full_path = list()
-    path = Path(__file__).parent.parent.parent.parent.parent / "algorithm" / "config"
-    wanted_file = "nanodet_{}.yml".format(model)
-    for root, dir, files in os.walk(path):
-        if wanted_file in files:
-            full_path.append(os.path.join(root, wanted_file))
-    assert (len(full_path) == 1), f"You must have only one nanodet_{model}.yaml file in your config folder"
-    load_config(cfg, full_path[0])
-    return cfg
-
-
 class OneStageDetector(nn.Module):
     def __init__(
         self,
@@ -60,6 +34,7 @@ class OneStageDetector(nn.Module):
         if head_cfg is not None:
             self.head = build_head(head_cfg)
 
+            # To init YOLO head
             if head_cfg.name == "Yolo":
                 s = 256  # 2x min stride
                 self.head.inplace = head_cfg.inplace
@@ -85,8 +60,8 @@ class OneStageDetector(nn.Module):
             if hasattr(self, "fpn"):
                 x = self.fpn(x)
             if hasattr(self, "head"):
-                if hasattr(self.head, "graph_forward"):
-                    x = self.head.graph_forward(x)
+                if hasattr(self.head, "forward_infer"):
+                    x = self.head.forward_infer(x)
                 else:
                     x = self.head(x)
         return x
@@ -104,6 +79,13 @@ class OneStageDetector(nn.Module):
             self.aux_fpn.dynamic = dynamic
         if hasattr(self, "aux_head"):
             self.aux_head.dynamic = dynamic
+
+    def set_inference_mode(self, inference_mode=False):
+        self.backbone.inference_mode = inference_mode
+        if hasattr(self, "fpn"):
+            self.fpn.inference_mode = inference_mode
+        if hasattr(self, "head"):
+            self.head.inference_mode = inference_mode
 
     def forward_train(self, gt_meta):
         preds = self(gt_meta["img"])
@@ -129,30 +111,3 @@ class OneStageDetector(nn.Module):
 
     def set_epoch(self, epoch):
         self.epoch = epoch
-
-
-if __name__ == '__main__':
-    import copy
-    cfg = _load_hparam("test")
-    model_cfg = copy.deepcopy(cfg.model)
-    name = model_cfg.arch.pop("name")
-    assert name == "OneStageDetector"
-
-
-    model = OneStageDetector(
-            model_cfg.arch.backbone, model_cfg.arch.fpn, model_cfg.arch.head
-        ).eval()
-
-    print(model)
-    print("=========================================")
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            print(name)
-    print("=========================================")
-    model.fuse()
-    print(model)
-    print("=========================================")
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            print(name)
-    print("=========================================")

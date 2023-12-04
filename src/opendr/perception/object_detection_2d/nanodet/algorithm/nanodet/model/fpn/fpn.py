@@ -1,6 +1,5 @@
 # Modification 2020 RangiLyu
 # Copyright 2018-2019 Open-MMLab.
-import torch.jit
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -33,7 +32,6 @@ class FPN(nn.Module):
                 build the feature pyramid. Default: 0.
             end_level (int): Index of the end input backbone level (exclusive) to
                 build the feature pyramid. Default: -1, which means the last level.
-            conv_cfg (dict): Config dict for convolution layer. Default: None.
             norm_cfg (dict): Config dict for normalization layer. Default: None.
             activation (str): Config dict for activation layer in ConvModule.
                 Default: None.
@@ -46,10 +44,8 @@ class FPN(nn.Module):
         num_outs,
         start_level=0,
         end_level=-1,
-        conv_cfg=None,
         norm_cfg=None,
         activation=None,
-        fork=False
     ):
         super(FPN, self).__init__()
         assert isinstance(in_channels, list)
@@ -57,8 +53,6 @@ class FPN(nn.Module):
         self.out_channels = out_channels
         self.num_ins = len(in_channels)
         self.num_outs = num_outs
-        self.fork = fork
-        self.fp16_enabled = False
 
         if end_level == -1:
             self.backbone_end_level = self.num_ins
@@ -77,7 +71,6 @@ class FPN(nn.Module):
                 in_channels[i],
                 out_channels,
                 1,
-                conv_cfg=conv_cfg,
                 norm_cfg=norm_cfg,
                 activation=activation,
                 inplace=False,
@@ -92,11 +85,8 @@ class FPN(nn.Module):
             if isinstance(m, nn.Conv2d):
                 xavier_init(m, distribution="uniform")
 
-    @torch.jit.unused
     def forward(self, inputs: List[Tensor]):
         assert len(inputs) == len(self.in_channels)
-        if self.fork:
-            return self.forward_fork(inputs)
 
         # build laterals
         laterals = [
@@ -108,38 +98,9 @@ class FPN(nn.Module):
         used_backbone_levels = len(laterals)
         for i in range(used_backbone_levels - 1, 0, -1):
             laterals[i - 1] = laterals[i - 1] + F.interpolate(
-                laterals[i], scale_factor=2, mode="bilinear"
+                laterals[i], scale_factor=2.0, mode="bilinear"
             )
 
         # build outputs
-        # outs = [laterals[i] for i in range(used_backbone_levels)]
-        # return outs
-        return laterals
-
-
-    def forward_fork(self, inputs: List[Tensor]):
-        # build laterals
-        futures = [
-            torch.jit.fork(lateral_conv, (inputs[i + self.start_level]))
-            for i, lateral_conv in enumerate(self.lateral_convs)
-        ]
-
-        laterals = [
-            future.wait()
-            for future in futures
-        ]
-
-        # build top-down path
-        used_backbone_levels = len(laterals)
-        for i in range(used_backbone_levels - 1, 0, -1):
-            futures[i - 1] = torch.jit.fork(self.interpolation, laterals[i - 1], laterals[i])
-
-        for i in range(used_backbone_levels - 1, 0, -1):
-            laterals[i - 1] = futures[i - 1].wait()
-
-        return laterals
-
-    @staticmethod
-    def interpolation(added_value, interpolation_value, scale_factor=2):
-        return (added_value + F.interpolate(
-            interpolation_value, scale_factor=scale_factor, mode="bilinear"))
+        outs = [laterals[i] for i in range(used_backbone_levels)]
+        return outs

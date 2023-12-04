@@ -196,18 +196,18 @@ def scriptable_warp_boxes(boxes, M, width, height):
     n = boxes.shape[0]
     if n:
         # warp points
-        xy = torch.ones((n * 4, 3), dtype=dtype, device=device)
+        xy = torch.ones((n * 4, 3), dtype=torch.float32, device=M.device)
         xy[:, :2] = boxes[:, [0, 1, 2, 3, 0, 3, 2, 1]].reshape(
             n * 4, 2
         )  # x1y1, x2y2, x1y2, x2y1
-        M = torch.transpose(M, 0, 1).to(dtype)  # .float()
+        M = torch.transpose(M, 0, 1).float()
         xy = torch.mm(xy, M)  # transform
         xy = (xy[:, :2] / xy[:, 2:3]).reshape(n, 8)  # rescale
         # create new boxes
         x = xy[:, [0, 2, 4, 6]]
         y = xy[:, [1, 3, 5, 7]]
         xy = torch.cat((x.min(1).values, y.min(1).values, x.max(1).values, y.max(1).values)).reshape(4, n)
-        xy = torch.transpose(xy, 0, 1).to(dtype)  # .float()
+        xy = torch.transpose(xy, 0, 1).float()
         # clip boxes
         xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
         xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
@@ -289,19 +289,21 @@ class ShapeTransform:
         translate: Random translate ratio.
         flip: Random flip probability.
         jitter_box: Random adjust box width and height.
+        hard_pos: Probability for hard positive mining to be applied an image to.
+        jard_pos_ratio: Random adjust box width and height for hard positive mining.
     """
 
     def __init__(
         self,
-        keep_ratio,
-        divisible=0,
-        perspective=0.0,
-        scale=(1, 1),
-        stretch=((1, 1), (1, 1)),
-        rotation=0.0,
-        shear=0.0,
-        translate=0.0,
-        flip=0.0,
+        keep_ratio: bool,
+        divisible: int = 0,
+        perspective: float = 0.0,
+        scale: Tuple[int, int]=(1, 1),
+        stretch: Tuple = ((1, 1), (1, 1)),
+        rotation: float = 0.0,
+        shear: float = 0.0,
+        translate: float = 0.0,
+        flip: float = 0.0,
         jitter_box: float = 0.0,
         hard_pos: float = 0.0,
         hard_pos_ratio: float = 0.0,
@@ -364,9 +366,10 @@ class ShapeTransform:
             boxes = warp_boxes(boxes, M, dst_shape[0], dst_shape[1])
             boxes, labels = filter_bboxes(boxes, meta_data["gt_labels"], (dst_shape[0], dst_shape[1]))
             if len(boxes) == 0:
-                img = raw_img
-                M = np.eye(3)
-                boxes = meta_data["gt_bboxes"]
+                img = cv2.warpPerspective(raw_img, ResizeM, dsize=tuple(dst_shape))
+                M = ResizeM
+                boxes = get_jitter_boxes(meta_data["gt_bboxes"], self.jitter_box_ratio)
+                boxes = warp_boxes(boxes, ResizeM, dst_shape[0], dst_shape[1])
                 labels = meta_data["gt_labels"]
             if random.uniform(0, 1) < self.hard_pos:
                 img = get_hard_pos(img, boxes, self.hard_pos_ratio)

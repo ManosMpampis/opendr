@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 try:
-    import thop # for FLOPs computation
+    import thop  # for FLOPs computation
 except ImportError:
     thop = None
 

@@ -35,7 +35,7 @@ class XMLBasedDataset(DetectionDataset):
     """
     def __init__(self, dataset_type, root, classes=None, image_transform=None,
                  target_transform=None, transform=None, splits='',
-                 images_dir='images', annotations_dir='annotations', preload_anno=False):
+                 images_dir='images', annotations_dir='annotations', preload_anno=False, number_of_images=None):
         self.abs_images_dir = os.path.join(root, images_dir)
         self.abs_annot_dir = os.path.join(root, annotations_dir)
         image_names = [im_filename for im_filename in os.listdir(self.abs_images_dir)
@@ -56,6 +56,9 @@ class XMLBasedDataset(DetectionDataset):
                     continue
                 bboxes = self._read_annotation_file(annot_file)
                 self.bboxes.append(bboxes)
+
+        #TODO: use number_of_images in xmldatasets too
+        self.number_of_images = number_of_images
 
     def _read_annotation_file(self, filename):
         root = ET.parse(filename).getroot()

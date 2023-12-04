@@ -29,9 +29,8 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transf
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util import get_size, mkdir
 
 
-IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # include image suffixes
 TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}'  # tqdm bar format
-NUM_THREADS = min(8, max(1, os.cpu_count() - 1))  # number of YOLOv5 multiprocessing threads
+NUM_THREADS = min(8, max(1, os.cpu_count() - 1))  # number of multiprocessing threads
 
 
 class BaseDataset(Dataset, metaclass=ABCMeta):
@@ -187,7 +186,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         n = min(len(self), 30)  # extrapolate from 30 random images
         for _ in range(n):
             meta = self.get_train_data(random.choice(range(len(self))))
-            b += get_size(meta) #.nbytes * ratio ** 2
+            b += get_size(meta)
         mem_required = b * len(self) / n  # GB required to cache dataset into RAM
         mem = psutil.virtual_memory()
         cache = mem_required * (1 + safety_margin) < mem.available  # to cache or not to cache, that is the question

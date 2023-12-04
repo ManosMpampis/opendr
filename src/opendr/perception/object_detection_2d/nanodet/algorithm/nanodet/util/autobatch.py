@@ -8,7 +8,6 @@ from copy import deepcopy
 import numpy as np
 import torch
 
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.logger import Logger
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.torch_utils import profile
 
 

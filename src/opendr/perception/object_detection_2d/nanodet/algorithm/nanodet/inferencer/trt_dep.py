@@ -23,9 +23,10 @@ import numpy as np
 # prevent issues with other modules that rely on the primary
 # device context.
 try:
-    import pycuda.autoprimaryctx
+    import pycuda.autoprimaryctx as pycuda_autinit  # noqa
 except ModuleNotFoundError:
-    import pycuda.autoinit
+    import pycuda.autoinit as pycuda_autinit  # noqa
+var = pycuda_autinit
 
 import pycuda.driver as cuda
 import tensorrt as trt

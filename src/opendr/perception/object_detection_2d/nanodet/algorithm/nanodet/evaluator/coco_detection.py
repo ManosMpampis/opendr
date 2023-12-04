@@ -50,7 +50,7 @@ class CocoDetectionEvaluator:
         self.class_names = dataset.class_names
         self.coco_api = dataset.coco_api
         self.cat_ids = dataset.cat_ids
-        self.logger = logger if logger else def_logger
+        self.logger = def_logger if (logger is None) else logger
         self.metric_names = ["mAP", "AP_50", "AP_75", "AP_small", "AP_m", "AP_l"]
 
     def results2json(self, results):
@@ -131,25 +131,25 @@ class CocoDetectionEvaluator:
             precision_50 = precisions[0, :, idx, 0, -1]
             precision_50 = precision_50[precision_50 > -1]
             ap50 = np.mean(precision_50) if precision_50.size else float("nan")
-            per_class_ap50s.append(float(ap50))# * 100))
+            per_class_ap50s.append(float(ap50))
 
             precision = precisions[:, :, idx, 0, -1]
             precision = precision[precision > -1]
             ap = np.mean(precision) if precision.size else float("nan")
-            per_class_maps.append(float(ap))# * 100))
+            per_class_maps.append(float(ap))
 
         # Average of all classes
         precision_50 = precisions[0, :, :, 0, -1]
         precision_50 = precision_50[precision_50 > -1]
         ap50 = np.mean(precision_50) if precision_50.size else float("nan")
-        per_class_ap50s.append(float(ap50))  # * 100))
+        per_class_ap50s.append(float(ap50))
 
         precision = precisions[:, :, :, 0, -1]
         precision = precision[precision > -1]
         ap = np.mean(precision) if precision.size else float("nan")
-        per_class_maps.append(float(ap))  # * 100))
+        per_class_maps.append(float(ap))
 
-        num_cols = min(colums, (len(self.class_names) + 1)* len(headers))
+        num_cols = min(colums, (len(self.class_names) + 1) * len(headers))
         flatten_results = []
         for name, ap50, mAP in zip(self.class_names + ["all"], per_class_ap50s, per_class_maps):
             flatten_results += [name, ap50, mAP]

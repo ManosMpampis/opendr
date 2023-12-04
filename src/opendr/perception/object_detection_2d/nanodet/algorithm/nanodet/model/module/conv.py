@@ -46,22 +46,24 @@ def fuse_conv_and_bn(conv, bn):
 
     return fusedconv
 
-
+#TODO: add fuse modules to heads and pans
 def fuse_modules(m):
     if isinstance(m, Conv) and hasattr(m, 'bn'):
         m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
         delattr(m, 'bn')  # remove batchnorm
         m.forward = m.forward_fuse  # update forward
-    elif isinstance(m, ConvQuant) and (hasattr(m, "bn") and hasattr(m, "act")):
-        if isinstance(m.bn, nn.BatchNorm2d) and isinstance(m.act, nn.ReLU):
-            torch.quantization.fuse_modules(m, [["conv", "bn", "act"]], inplace=True)
-        elif isinstance(m.act, nn.ReLU) and not isinstance(m.bn, nn.BatchNorm2d):
-            torch.quantization.fuse_modules(m, [["conv", "act"]], inplace=True)
-        elif isinstance(m.bn, nn.BatchNorm2d) and not isinstance(m.act, nn.ReLU):
-            torch.quantization.fuse_modules(m, [["conv", "bn"]], inplace=True)
-        delattr(m, 'bn')
-        delattr(m, 'act')
-        m.forward = m.forward_fuse
+    elif isinstance(m, ConvModule) and m.norm_name in ["bn"]:
+        if isinstance(m.norm, nn.BatchNorm2d):
+            m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
+            m.norm_name = None
+            m.norm = nn.Identity()  # remove batchnorm
+    elif isinstance(m, DepthwiseConvModule) and m.with_norm:
+        if isinstance(m.dwnorm, nn.BatchNorm2d):
+            m.depthwise = fuse_conv_and_bn(m.depthwise, m.dwnorm)  # update conv
+            m.dwnorm = nn.Identity()  # remove batchnorm
+        if isinstance(m.pwnorm, nn.BatchNorm2d):
+            m.pointwise = fuse_conv_and_bn(m.pointwise, m.pwnorm)  # update conv
+            m.pwnorm = nn.Identity()  # remove batchnorm
     elif isinstance(m, nn.Sequential) or isinstance(m, nn.ModuleList):
         for m_in_list in m:
             fuse_modules(m_in_list)
@@ -86,7 +88,7 @@ class Conv(nn.Module):
 
     def init_weights(self):
         for m in self.modules():
-            if isinstance(m, Conv) or isinstance(m, ConvQuant):
+            if isinstance(m, Conv):
                 nonlinearity = "leaky_relu" if isinstance(self.act, nn.LeakyReLU) else "relu"
                 a = m.act.negative_slope if isinstance(self.act, nn.LeakyReLU) else 0
                 nn.init.kaiming_normal_(
@@ -94,48 +96,6 @@ class Conv(nn.Module):
                 )
                 m.bn.weight.data.fill_(1)
                 m.bn.bias.data.zero_()
-
-
-class ConvQuant(Conv):
-    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
-        super(ConvQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-
-    def forward(self, x):
-        x = self.quant(x)
-        x = super().forward(x)
-        x = self.dequant(x)
-        return x
-
-    def forward_fuse(self, x):
-        x = self.quant(x)
-        x = super().forward_fuse(x)
-        x = self.dequant(x)
-        return x
-
-    def temp(self):
-        model = ConvQuant()
-        print(model)
-
-        def prepare_save(model, fused):
-            from torch.utils.mobile_optimizer import optimize_for_mobile
-            model.qconfig = torch.quantization.get_default_qconfig('qnnpack')
-            torch.quantization.prepare(model, inplace=True)
-            torch.quantization.convert(model, inplace=True)
-            torchscript_model = torch.jit.script(model)
-            torchscript_model_optimized = optimize_for_mobile(torchscript_model)
-            torch.jit.save(torchscript_model_optimized, "model.pt" if not fused else "model_fused.pt")
-
-        prepare_save(model, False)
-
-        model = ConvQuant()
-        model_fused = torch.quantization.fuse_modules(model, [["conv", "bn", "relu"]], inplace=False)
-        print(model_fused)
-
-        prepare_save(model_fused, True)
 
 
 class ConvPool(Conv):
@@ -153,27 +113,6 @@ class ConvPool(Conv):
         return self.act(self.pool(self.conv(x)))
 
 
-class ConvPoolQuant(ConvPool):
-    # Standard convolution include Quantization with args(ch_in, ch_out, kernel, stride, padding, groups, dilation)
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, pool=True):
-        super(ConvPoolQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-
-    def forward(self, x):
-        x = self.quant(x)
-        x = super().forward(x)
-        x = self.dequant(x)
-        return x
-
-    def forward_fuse(self, x):
-        x = self.quant(x)
-        x = super().forward_fuse(x)
-        x = self.dequant(x)
-        return x
-
-
 class DWConv(nn.Module):
     def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
         super().__init__()
@@ -182,26 +121,6 @@ class DWConv(nn.Module):
 
     def forward(self, x):
         return self.pointwise(self.depthwise(x))
-
-
-class DWConvQuant(DWConv):
-    # Depth-wise convolution
-    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
-        super(DWConvQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act)
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-
-    def forward(self, x):
-        x = self.quant(x)
-        x = super().forward(x)
-        x = self.dequant(x)
-        return x
-
-    def forward_fuse(self, x):
-        x = self.quant(x)
-        x = super().forward_fuse(x)
-        x = self.dequant(x)
-        return x
 
 
 class DWConvPool(nn.Module):
@@ -216,26 +135,6 @@ class DWConvPool(nn.Module):
 
     def forward(self, x):
         return self.pointwise(self.depthwise(x))
-
-
-class DWConvPoolQuant(DWConvPool):
-    # Depth-wise convolution
-    def __init__(self, c1, c2, k=1, s=1, p=0, d=1, act=True, g=None, pool=True):
-        super(DWConvPoolQuant, self).__init__(c1=c1, c2=c2, k=k, s=s, p=p, g=g, d=d, act=act, pool=pool)
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-
-    def forward(self, x):
-        x = self.quant(x)
-        x = super().forward(x)
-        x = self.dequant(x)
-        return x
-
-    def forward_fuse(self, x):
-        x = self.quant(x)
-        x = super().forward_fuse(x)
-        x = self.dequant(x)
-        return x
 
 
 class Bottleneck(nn.Module):
@@ -265,7 +164,6 @@ class C3(nn.Module):
         return self.cv3(torch.cat((self.m(self.cv1(x)), self.cv2(x)), 1))
 
 
-
 class SPPF(nn.Module):
     # Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher
     def __init__(self, c1, c2, k=5):  # equivalent to SPP(k=(5, 9, 13))
@@ -280,7 +178,6 @@ class SPPF(nn.Module):
         y1 = self.m(x)
         y2 = self.m(y1)
         return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
-
 
 
 class MultiOutput(nn.Module):
@@ -328,9 +225,9 @@ class ConvModule(nn.Module):
         bias (bool or str): If specified as `auto`, it will be decided by the
             norm_cfg. Bias will be set as True if norm_cfg is None, otherwise
             False.
-        conv_cfg (dict): Config dict for convolution layer.
         norm_cfg (dict): Config dict for normalization layer.
         activation (str): activation layer, "ReLU" by default.
+        pool (nn.Module): pool layer, None by default.
         inplace (bool): Whether to use inplace mode for activation.
         order (tuple[str]): The order of conv/norm/activation layers. It is a
             sequence of "conv", "norm" and "act". Examples are
@@ -347,23 +244,22 @@ class ConvModule(nn.Module):
         dilation=1,
         groups=1,
         bias="auto",
-        conv_cfg=None,
         norm_cfg=None,
         activation="ReLU",
+        pool=None,
         inplace=True,
-        order=("conv", "norm", "act"),
+        order=("conv", "norm", "pool", "act"),
     ):
         super(ConvModule, self).__init__()
-        assert conv_cfg is None or isinstance(conv_cfg, dict)
         assert norm_cfg is None or isinstance(norm_cfg, dict)
         assert activation is None or isinstance(activation, str)
-        self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.activation = activation
         self.inplace = inplace
         self.order = order
-        assert isinstance(self.order, tuple) and len(self.order) == 3
-        assert set(order) == {"conv", "norm", "act"}
+        assert isinstance(self.order, tuple) and len(self.order) == 4
+        assert set(order) == {"conv", "norm", "pool", "act"}
+        assert pool is None or isinstance(pool, nn.Module)
 
         self.with_norm = norm_cfg is not None
         # if the conv layer is before a norm layer, bias is unnecessary.
@@ -375,7 +271,7 @@ class ConvModule(nn.Module):
             warnings.warn("ConvModule has norm and bias at the same time")
 
         # build convolution layer
-        self.conv = nn.Conv2d(  #
+        self.conv = nn.Conv2d(
             in_channels,
             out_channels,
             kernel_size,
@@ -405,8 +301,13 @@ class ConvModule(nn.Module):
                 norm_channels = in_channels
             self.norm_name, norm = build_norm_layer(norm_cfg, norm_channels)
             self.add_module(self.norm_name, norm)
+            self.norm = getattr(self, self.norm_name)
         else:
             self.norm_name = None
+            self.norm = nn.Identity()
+
+        # set pool layer
+        self.pool = pool
 
         # build activation layer
         if self.activation:
@@ -415,32 +316,23 @@ class ConvModule(nn.Module):
         # Use msra init by default
         self.init_weights()
 
-    @torch.jit.unused
-    @property
-    def norm(self):
-        if self.norm_name is not None:
-            return getattr(self, self.norm_name)
-        else:
-            return None
-
     def init_weights(self):
         if self.activation == "LeakyReLU":
             nonlinearity = "leaky_relu"
-            a = self.act.negative_slope
         else:
             nonlinearity = "relu"
-            a = 0
-        kaiming_init(self.conv, nonlinearity=nonlinearity, a=a)
+        kaiming_init(self.conv, nonlinearity=nonlinearity)
         if self.with_norm:
             constant_init(self.norm, 1, bias=0)
 
-    @torch.jit.unused
-    def forward(self, x, norm: bool = True):
+    def forward(self, x):
         for layer in self.order:
             if layer == "conv":
                 x = self.conv(x)
-            elif layer == "norm" and (norm is not None) and (self.with_norm is not None) and (self.norm is not None):
+            elif layer == "norm" and self.with_norm:
                 x = self.norm(x)
+            elif layer == "pool" and self.pool is not None:
+                x = self.pool(x)
             elif layer == "act" and (self.activation is not None):
                 x = self.act(x)
         return x
@@ -455,28 +347,32 @@ class DepthwiseConvModule(nn.Module):
         stride=1,
         padding=0,
         dilation=1,
+        groups=1,
         bias="auto",
         norm_cfg=dict(type="BN"),
         activation="ReLU",
+        pool=None,
         inplace=True,
-        order=("depthwise", "dwnorm", "act", "pointwise", "pwnorm", "act"),  # ("depthwise", "act", "pointwise", "act"), #("depthwise", "dwnorm", "act", "pointwise", "pwnorm", "act"),
+        order=("depthwise", "dwnorm", "act", "pointwise", "pwnorm", "pool", "act"),
     ):
         super(DepthwiseConvModule, self).__init__()
         assert activation is None or isinstance(activation, str)
+        assert pool is None or isinstance(pool, nn.Module)
         self.activation = activation
         self.inplace = inplace
         self.order = order
-        assert isinstance(self.order, tuple) and len(self.order) == 6
+        assert isinstance(self.order, tuple) and len(self.order) == 7
         assert set(order) == {
             "depthwise",
             "dwnorm",
             "act",
             "pointwise",
             "pwnorm",
+            "pool",
             "act",
         }
 
-        self.with_norm = norm_cfg['type'] != "None"
+        self.with_norm = norm_cfg is not None
         # if the conv layer is before a norm layer, bias is unnecessary.
         if bias == "auto":
             bias = False if self.with_norm else True
@@ -518,8 +414,13 @@ class DepthwiseConvModule(nn.Module):
         else:
             self.dwnorm = nn.Identity()
             self.pwnorm = nn.Identity()
+
+        # set pool layer
+        self.pool = pool
+
         # build activation layer
-        self.act = act_layers(self.activation)
+        if self.activation:
+            self.act = act_layers(self.activation)
 
         # Use msra init by default
         self.init_weights()
@@ -527,12 +428,10 @@ class DepthwiseConvModule(nn.Module):
     def init_weights(self):
         if self.activation == "LeakyReLU":
             nonlinearity = "leaky_relu"
-            a = self.act.negative_slope
         else:
             nonlinearity = "relu"
-            a = 0
-        kaiming_init(self.depthwise, nonlinearity=nonlinearity, a=a)
-        kaiming_init(self.pointwise, nonlinearity=nonlinearity, a=a)
+        kaiming_init(self.depthwise, nonlinearity=nonlinearity)
+        kaiming_init(self.pointwise, nonlinearity=nonlinearity)
         if self.with_norm:
             constant_init(self.dwnorm, 1, bias=0)
             constant_init(self.pwnorm, 1, bias=0)
@@ -547,6 +446,8 @@ class DepthwiseConvModule(nn.Module):
                 x = self.dwnorm(x)
             elif layer_name == "pwnorm" and (self.pwnorm is not None):
                 x = self.pwnorm(x)
+            elif layer_name == "pool" and (self.pool is not None):
+                x = self.pool(x)
             elif layer_name == "act" and (self.activation is not None):
                 x = self.act(x)
         return x

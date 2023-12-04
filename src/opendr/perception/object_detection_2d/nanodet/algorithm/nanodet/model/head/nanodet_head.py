@@ -17,7 +17,8 @@ import torch.nn as nn
 from torch import Tensor
 from typing import List
 
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import ConvModule, DepthwiseConvModule
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import ConvModule, \
+    DepthwiseConvModule
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.init_weights import normal_init
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.gfl_head import GFLHead
 
@@ -35,7 +36,6 @@ class NanoDetHead(GFLHead):
         stacked_convs=2,
         octave_base_scale=5,
         use_depthwise=True,
-        conv_cfg=None,
         norm_cfg=dict(type="BN"),
         reg_max=16,
         share_cls_reg=False,
@@ -55,7 +55,6 @@ class NanoDetHead(GFLHead):
             stacked_convs,
             octave_base_scale,
             strides,
-            conv_cfg,
             norm_cfg,
             reg_max,
             **kwargs
@@ -82,7 +81,6 @@ class NanoDetHead(GFLHead):
                 for _ in self.strides
             ]
         )
-        # TODO: if
         self.gfl_reg = nn.ModuleList(
             [
                 nn.Conv2d(self.feat_channels, 4 * (self.reg_max + 1), 1, padding=0)
@@ -137,11 +135,7 @@ class NanoDetHead(GFLHead):
             normal_init(self.gfl_reg[i], std=0.01)
         print("Finish initialize NanoDet Head.")
 
-    @torch.jit.unused
     def forward(self, feats: List[Tensor]):
-        if self.fork:
-            return self.forward_fork(feats)
-
         outputs = []
         for idx, (cls_convs, reg_convs, gfl_cls, gfl_reg) in enumerate(zip(
             self.cls_convs, self.reg_convs, self.gfl_cls, self.gfl_reg
@@ -162,35 +156,3 @@ class NanoDetHead(GFLHead):
 
         outputs = torch.cat(outputs, dim=2).permute(0, 2, 1).contiguous()
         return outputs
-
-    @torch.jit.unused
-    def forward_fork(self, feats: List[Tensor]):
-        outputs = []
-        futures = []
-        for idx, (cls_convs, reg_convs, gfl_cls, gfl_reg) in enumerate(zip(
-                self.cls_convs, self.reg_convs, self.gfl_cls, self.gfl_reg
-        )):
-            future = torch.jit.fork(self.forward_each_input, feats, idx, cls_convs, reg_convs, gfl_cls, gfl_reg)
-            futures.append(future)
-
-        for future in futures:
-            outputs.append(future.wait())
-
-        outputs = torch.cat(outputs, dim=2).permute(0, 2, 1).contiguous()
-        return outputs
-
-    def forward_each_input(self, feats, idx, cls_convs, reg_convs, gfl_cls, gfl_reg):
-        cls_feat = feats[idx]
-        reg_feat = feats[idx]
-        for cls_conv in cls_convs:
-            cls_feat = cls_conv(cls_feat)
-        for reg_conv in reg_convs:
-            reg_feat = reg_conv(reg_feat)
-        if self.share_cls_reg:
-            output = gfl_cls(cls_feat)
-        else:
-            cls_score = gfl_cls(cls_feat)
-            bbox_pred = gfl_reg(reg_feat)
-            output = torch.cat([cls_score, bbox_pred], dim=1)
-        output = output.flatten(start_dim=2)
-        return output

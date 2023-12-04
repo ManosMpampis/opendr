@@ -141,6 +141,9 @@ class CocoDataset(BaseDataset):
             print(f"image {image_path} read failed.")
             raise FileNotFoundError("Cant load image! Please check image path!")
         ann = self.get_img_annotation(idx)
+        # meta = dict(
+        #     img=img, img_info=img_info, gt_bboxes=ann["bboxes"], gt_labels=ann["labels"]
+        # )
         meta = dict(
             img=img, gt_bboxes=ann["bboxes"], gt_labels=ann["labels"]
         )
@@ -170,6 +173,7 @@ class CocoDataset(BaseDataset):
         meta = self.pipeline(self, meta, input_size)
 
         meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1))
+        # Output Tensors instead of numpy
         for key, value in meta.items():
             if key in ["idx", "width", "height"]:
                 meta[key] = torch.tensor(value)

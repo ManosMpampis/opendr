@@ -6,13 +6,6 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.head.assigner.base_assigner import BaseAssigner
 
 
-def hinge_loss(input, target, margin = 1.0, size_average = None, reduce = None, reduction = "mean", use_sigmoid = True):
-    if use_sigmoid:
-        input = input.sigmoid()
-    loss = F.hinge_embedding_loss(input, target, margin=margin, size_average=size_average, reduce=reduce,
-                                  reduction=reduction)
-    return loss
-
 class DynamicSoftLabelAssigner(BaseAssigner):
     """Computes matching between predictions and ground truth with
     dynamic soft label assignment.
@@ -23,15 +16,9 @@ class DynamicSoftLabelAssigner(BaseAssigner):
         iou_factor (float): The scale factor of iou cost. Default 3.0.
     """
 
-    def __init__(self, topk=13, iou_factor=3.0, cost_function=None):
+    def __init__(self, topk=13, iou_factor=3.0):
         self.topk = topk
         self.iou_factor = iou_factor
-        if cost_function == "Hinge":
-            self.cost_function = hinge_loss
-        elif (cost_function is None) or (cost_function == "Cross"):
-            self.cost_function = F.binary_cross_entropy_with_logits
-        else:
-            raise NotImplementedError
 
     def assign(
         self,
@@ -106,18 +93,9 @@ class DynamicSoftLabelAssigner(BaseAssigner):
         soft_label = gt_onehot_label * pairwise_ious[..., None]
         scale_factor = soft_label - valid_pred_scores.sigmoid()
 
-        cls_cost = self.cost_function(valid_pred_scores, soft_label,
-                                      reduction="none") * scale_factor.abs().pow(2.0)
-
-        # cls_cost = F.binary_cross_entropy_with_logits(
-        #     valid_pred_scores, soft_label, reduction="none"
-        # ) * scale_factor.abs().pow(2.0)
-
-
-        # # to run, nanodet plus send cls.sigmoid(), maybe something must change
-        # cls_cost = F.hinge_embedding_loss(
-        #     valid_pred_scores.sigmoid(), soft_label, reduction="none"
-        # ) * scale_factor.abs().pow(2.0)
+        cls_cost = F.binary_cross_entropy_with_logits(
+            valid_pred_scores, soft_label, reduction="none"
+        ) * scale_factor.abs().pow(2.0)
 
         cls_cost = cls_cost.sum(dim=-1)
 

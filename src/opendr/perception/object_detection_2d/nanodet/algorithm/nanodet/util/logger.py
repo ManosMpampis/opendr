@@ -50,7 +50,7 @@ class NoneWriter:
 
 
 class Logger:
-    def __init__(self, local_rank, save_dir="./", use_tensorboard=True, profiling=True):
+    def __init__(self, local_rank, save_dir="./", use_tensorboard=True):
         mkdir(local_rank, save_dir)
         self.rank = local_rank
         fmt = "[%(name)s] [%(asctime)s] %(levelname)s: %(message)s"
@@ -152,12 +152,10 @@ class NanoDetLightningLogger(LightningLoggerBase):
         self._name = "NanoDet"
         self._version = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
         self._save_dir = os.path.join(save_dir, f"logs-{self._version}")
-        # self.log_dir = os.path.join(save_dir, f"logs-{self._version}")
 
         self._fs = get_filesystem(save_dir)
         if not self.verbose_only:
             self._fs.makedirs(self._save_dir, exist_ok=True)
-            # self._fs.makedirs(self.log_dir, exist_ok=True)
         self._init_logger(verbose_only)
 
         self._experiment = None
@@ -196,7 +194,6 @@ class NanoDetLightningLogger(LightningLoggerBase):
             self._experiment = NoneWriter(log_dir=self._save_dir, **self._kwargs)
         else:
             self._experiment = SummaryWriter(log_dir=self._save_dir, **self._kwargs)
-            # self._experiment = SummaryWriter(log_dir=self.log_dir, **self._kwargs)
         return self._experiment
 
     @property
@@ -241,7 +238,6 @@ class NanoDetLightningLogger(LightningLoggerBase):
 
     @rank_zero_only
     def dump_cfg(self, cfg_node):
-        # with open(os.path.join(self.log_dir, "train_cfg.yml"), "w") as f:
         with open(os.path.join(self._save_dir, "train_cfg.yml"), "w") as f:
             cfg_node.dump(stream=f)
         if self.verbose_only is False:

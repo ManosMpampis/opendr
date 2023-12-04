@@ -22,19 +22,36 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transf
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.arch import build_model
 
 
+class ScriptedPredictor(nn.Module):
+    def __init__(self, model, dummy_input, conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, dynamic=False):
+        super(ScriptedPredictor, self).__init__()
+        model.forward = model.inference
+        self.model = model
+        self.conf_thresh = conf_thresh
+        self.iou_thresh = iou_thresh
+        self.nms_max_num = nms_max_num
+        self.jit_model = torch.jit.script(self.model) if dynamic else torch.jit.trace(self.model, dummy_input[0])
+
+    def forward(self, input, height, width, warp_matrix):
+        preds = self.jit_model(input)
+        meta = dict(height=height, width=width, warp_matrix=warp_matrix, img=input)
+        return self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
+                                            nms_max_num=self.nms_max_num)
+
+
 class Predictor(nn.Module):
-    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100, hf=False, dynamic=False):
+    def __init__(self, cfg, model, device="cuda", conf_thresh=0.35, iou_thresh=0.6, nms_max_num=100,
+                 hf=False, dynamic=False, ch_l=False, fuse=False):
         super(Predictor, self).__init__()
         self.cfg = cfg
         self.device = device
-        self.conf_threshold = conf_thresh
-        self.iou_threshold = iou_thresh
+        self.conf_thresh = conf_thresh
+        self.iou_thresh = iou_thresh
         self.nms_max_num = nms_max_num
         self.hf = hf
-        self.fuse = self.cfg.model.arch.fuse
-        self.ch_l = self.cfg.model.arch.ch_l
-        self.dynamic = dynamic
-        self.traced_model = None
+        self.ch_l = ch_l
+        self.fuse = fuse
+        self.dynamic = dynamic and self.cfg.data.val.keep_ratio
         if self.cfg.model.arch.backbone.name == "RepVGG":
             deploy_config = self.cfg.model
             deploy_config.arch.backbone.update({"deploy": True})
@@ -53,58 +70,52 @@ class Predictor(nn.Module):
         if self.hf:
             model = model.half()
         model.set_dynamic(self.dynamic)
+        model.set_inference_mode(True)
 
         self.model = model.to(device).eval()
 
         self.pipeline = Pipeline(self.cfg.data.val.pipeline, self.cfg.data.val.keep_ratio)
 
     def trace_model(self, dummy_input):
-        self.traced_model = torch.jit.trace(self, dummy_input)
-        return True
+        return torch.jit.trace(self, dummy_input[0])
 
-    def script_model(self, img, height, width, warp_matrix):
-        preds = self.traced_model(img, height, width, warp_matrix)
-        scripted_model = self.postprocessing(preds, img, height, width, warp_matrix)
-        return scripted_model
+    def script_model(self):
+        return torch.jit.script(self)
 
-    def forward(self, img, height=torch.tensor(0), width=torch.tensor(0), warp_matrix=torch.tensor(0)):
-        if torch.jit.is_scripting():
-            return self.script_model(img, height, width, warp_matrix)
-        # In tracing (Jit and Onnx optimizations) we must first run the pipeline before the graf,
-        # cv2 is needed, and it is installed with abi cxx11 but torch is in cxx<11
+    def c_script(self, dummy_input):
+        import copy
+        jit_ready_predictor = ScriptedPredictor(copy.deepcopy(self.model), dummy_input, self.conf_thresh,
+                                                self.iou_thresh, self.nms_max_num, dynamic=self.dynamic)
+        return torch.jit.script(jit_ready_predictor)
+
+    def forward(self, img):
         return self.model.inference(img)
 
-    def preprocessing(self, img, bench=False):
-        if bench:
-            try:
-                input_size = self.cfg.data.bench_test.input_size
-            except AttributeError as e:
-                print(f"{e}, val input will be used")
-                input_size = self.cfg.data.val.input_size
-        else:
-            input_size = self.cfg.data.val.input_size
+    def preprocessing(self, img):
+        img_info = {"id": 0}
         height, width = img.shape[:2]
-        meta = dict(id=0, height=height, width=width, raw_img=img, img=img)
-        meta = self.pipeline(None, meta, input_size)
-        meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device, torch.half if self.hf else torch.float32)
+        img_info["height"] = height
+        img_info["width"] = width
+        meta = dict(img_info=img_info, raw_img=img, img=img)
+        meta = self.pipeline(None, meta, self.cfg.data.val.input_size)
+        meta["img"] = torch.from_numpy(meta["img"].transpose(2, 0, 1)).to(self.device)
 
         meta["img"] = divisible_padding(
             meta["img"],
-            divisible=torch.tensor(32, device=self.device, dtype=torch.half if self.hf else torch.float)
+            divisible=torch.tensor(32, device=self.device)
         )
 
-        # meta["img"] = meta["img"].to(torch.uint8)
-        _input = meta["img"]
+        _input = meta["img"].to(torch.half if self.hf else torch.float32)
         _input = _input.to(memory_format=torch.channels_last) if self.ch_l else _input
         _height = torch.as_tensor(height, device=self.device)
         _width = torch.as_tensor(width, device=self.device)
-        _warp_matrix = torch.from_numpy(meta["warp_matrix"]).to(self.device)  # inverted matrix do not supported in torch.half
+        _warp_matrix = torch.from_numpy(meta["warp_matrix"]).to(self.device)
 
         return _input, _height, _width, _warp_matrix
 
     def postprocessing(self, preds, input, height, width, warp_matrix):
-        meta = dict(height=height.unsqueeze(0), width=width.unsqueeze(0), id=torch.zeros(1, 1), warp_matrix=warp_matrix.unsqueeze(0), img=input)
-        res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_threshold, iou_thresh=self.iou_threshold,
+        meta = dict(height=height, width=width, warp_matrix=warp_matrix, img=input)
+        res = self.model.head.post_process(preds, meta, conf_thresh=self.conf_thresh, iou_thresh=self.iou_thresh,
                                            nms_max_num=self.nms_max_num)
         return res
 
@@ -122,7 +133,8 @@ class Postprocessor(nn.Module):
         self.model = model.to(device).eval()
 
     def forward(self, preds, input, height, width, warp_matrix):
-        meta = dict(height=height.unsqueeze(0), width=width.unsqueeze(0), id=torch.zeros(1, 1), warp_matrix=warp_matrix.unsqueeze(0), img=input.unsqueeze(0))
+        meta = dict(height=height.unsqueeze(0), width=width.unsqueeze(0), id=torch.zeros(1, 1),
+                    warp_matrix=warp_matrix.unsqueeze(0), img=input.unsqueeze(0))
         if self.hf:
             meta["img"] = meta["img"].half()
             preds = preds.half()
