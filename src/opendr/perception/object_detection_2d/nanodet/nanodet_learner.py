@@ -1158,13 +1158,13 @@ class NanodetLearner(Learner):
               f"infer + postpr fps = {fps_ifer_post_timings} evn/s")
         if self.jit_model:
             print(f"\n\n=== JIT measurements === \n"
-                  f"preprocessing  fps = {fps_preprocess_timings} evn/s")
-            print(f"infer + postpr fps = {fps_jit_infer_timings} evn/s")
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
+                  f"infer fps = {fps_jit_infer_timings} evn/s")
 
         if self.trt_model:
             print(f"\n\n=== TRT measurements === \n"
-                  f"preprocessing  fps = {fps_preprocess_timings} evn/s")
-            print(f"infer          fps = {fps_trt_infer_timings} evn/s\n"
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
+                  f"infer          fps = {fps_trt_infer_timings} evn/s\n"
                   f"postprocessing fps = {fps_trt_postprocessing_timings} evn/s\n"
                   f"infer + postpr fps = {fps_trt_infer_post_timings} env/s")
 
@@ -1394,13 +1394,13 @@ class NanodetLearner(Learner):
               f"infer + postpr fps = {fps_full_infer_timings} evn/s")
         if self.jit_model:
             print(f"\n\n=== JIT measurements === \n"
-                  f"preprocessing  fps = {fps_preprocess_timings} evn/s")
-            print(f"infer + postpr fps = {fps_jit_infer_timings} evn/s")
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
+                  f"infer fps = {fps_jit_infer_timings} evn/s")
 
         if self.trt_model:
             print(f"\n\n=== TRT measurements === \n"
-                  f"preprocessing  fps = {fps_preprocess_timings} evn/s")
-            print(f"infer          fps = {fps_trt_infer_timings} evn/s\n"
+                  f"preprocessing  fps = {fps_preprocess_timings} evn/s\n"
+                  f"infer          fps = {fps_trt_infer_timings} evn/s\n"
                   f"postprocessing fps = {fps_trt_postprocessing_timings} evn/s\n"
                   f"infer + postpr fps = {fps_trt_full_run_timings} evn/s")
 
