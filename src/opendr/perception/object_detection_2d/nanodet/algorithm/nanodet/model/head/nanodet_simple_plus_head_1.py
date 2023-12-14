@@ -13,7 +13,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transf
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss import DistributionFocalLoss,\
     QualityFocalLoss, GIoULoss
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv \
-    import Conv, DWConv, ConvQuant, DWConvQuant
+    import Conv, DWConv
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import fuse_modules
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
@@ -89,12 +89,9 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         reg_max=7,
         activation="LeakyReLU",
         assigner_cfg=dict(topk=13),
-        fork=False,
-        quant=False,
         **kwargs
     ):
         super(SimplifierNanoDetPlusHead_1, self).__init__()
-        self.fork = fork
         self.num_classes = num_classes
         self.in_channels = input_channel
         self.feat_channels = feat_channels
@@ -104,11 +101,7 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         self.reg_max = reg_max
         self.activation = activation
 
-        if use_depthwise:
-            self.ConvModule = DWConvQuant if quant else DWConv
-        else:
-            self.ConvModule = ConvQuant if quant else Conv
-        # self.ConvModule = DWConv if use_depthwise else Conv
+        self.ConvModule = DWConv if use_depthwise else Conv
 
         self.loss_cfg = loss
         self.norm_cfg = norm_cfg
@@ -116,17 +109,10 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         self.assigner = DynamicSoftLabelAssigner(**assigner_cfg)
         self.distribution_project = Integral(self.reg_max)
 
-        try:
-            self.loss_qfl = QualityFocalLoss(
-                beta=self.loss_cfg.loss_qfl.beta,
-                loss_weight=self.loss_cfg.loss_qfl.loss_weight,
-                cost_function=self.loss_cfg.loss_qfl.cost_function,
-            )
-        except AttributeError:
-            self.loss_qfl = QualityFocalLoss(
-                beta=self.loss_cfg.loss_qfl.beta,
-                loss_weight=self.loss_cfg.loss_qfl.loss_weight
-            )
+        self.loss_qfl = QualityFocalLoss(
+            beta=self.loss_cfg.loss_qfl.beta,
+            loss_weight=self.loss_cfg.loss_qfl.loss_weight
+        )
 
         self.loss_dfl = DistributionFocalLoss(
             loss_weight=self.loss_cfg.loss_dfl.loss_weight

@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch.jit
 import torch.nn as nn
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import Conv, DWConv, ConvQuant, DWConvQuant
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import Conv, DWConv
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import fuse_modules
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
@@ -14,14 +14,11 @@ class VggBackbone(nn.Module):
         self,
         activation="ReLU",
         use_depthwise=False,
-        quant=False,
     ):
         super(VggBackbone, self).__init__()
         self.activation = activation
-        if use_depthwise:
-            conv = DWConvQuant if quant else DWConv
-        else:
-            conv = ConvQuant if quant else Conv
+
+        conv = DWConv if use_depthwise else Conv
 
         self.conv_0 = conv(3, 8, k=3, s=2, p=1, act=act_layers(self.activation))
         self.conv_1 = conv(8, 8, k=3, s=1, p=1, act=act_layers(self.activation))

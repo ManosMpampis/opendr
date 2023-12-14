@@ -13,7 +13,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transf
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss import DistributionFocalLoss,\
     QualityFocalLoss, GIoULoss
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv \
-    import Conv, DWConv, ConvQuant, DWConvQuant
+    import Conv, DWConv
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import fuse_modules
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
@@ -90,12 +90,9 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
         reg_max=7,
         activation="LeakyReLU",
         assigner_cfg=dict(topk=13),
-        fork=False,
-        quant=False,
         **kwargs
     ):
         super(SimplifierNanoDetPlusHead_1, self).__init__()
-        self.fork = fork
         self.num_classes = num_classes
         self.in_channels = input_channel
         self.feat_channels = feat_channels
@@ -107,14 +104,8 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
 
         self.center_priors_1 = torch.empty(0)
         self.center_priors_0 = torch.empty(0)
-        # for idx in range(len(strides)):
-        #     self.register_buffer(f"center_priors_{idx}", torch.empty(0))
 
-        if use_depthwise:
-            self.ConvModule = DWConvQuant if quant else DWConv
-        else:
-            self.ConvModule = ConvQuant if quant else Conv
-        # self.ConvModule = DWConv if use_depthwise else Conv
+        self.ConvModule = DWConv if use_depthwise else Conv
 
         self.loss_cfg = loss
         self.norm_cfg = norm_cfg

@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch.jit
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import Conv, DWConv, ConvQuant, DWConvQuant
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import Conv, DWConv
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import fuse_modules
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
@@ -16,21 +16,20 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.modul
 #     [[-1, -2], concat]
 #     []
 # ]
+
+
 class SimpleCnn(nn.Module):
 
     def __init__(
         self,
         activation="ReLU",
         use_depthwise=False,
-        quant=False,
         pretrain=False
     ):
         super(SimpleCnn, self).__init__()
         self.activation = activation
-        if use_depthwise:
-            conv = DWConvQuant if quant else DWConv
-        else:
-            conv = ConvQuant if quant else Conv
+
+        conv = DWConv if use_depthwise else Conv
 
         self.conv_0 = conv(3, 8, k=3, s=2, p=1, act=act_layers(self.activation))
         self.conv_1 = conv(8, 8, k=3, s=2, p=1, act=act_layers(self.activation))
@@ -59,7 +58,7 @@ class SimpleCnn(nn.Module):
             self.load_state_dict(pretrained_state_dict, strict=False)
         else:
             for m in self.modules():
-                if isinstance(m, Conv) or isinstance(m, ConvQuant):
+                if isinstance(m, Conv):
                     nonlinearity = "leaky_relu" if self.activation == "LeakyReLU" else "relu"
                     a = m.act.negative_slope if self.activation == "LeakyReLU" else 0
                     nn.init.kaiming_normal_(

@@ -8,15 +8,14 @@ model:
   arch:
     name: OneStageDetector
     backbone:
-      name: SmallVgg
+      name: Vgg
       out_stages: [3, 4]
       stages_inplanes:  [3, 8, 8, 6]
       stages_outplanes: [8, 8, 6, 6]
       stages_strides:   [2, 2, 1, 2] #To fpn xriazete piramida me diafora scale 2 gia na litourgisi ara anamesa apo ta outs xrizete ena stride 2
-      maxpool_after:    [0, 0, 0, 0]
-      maxpool_stride:   1
+      maxpool_kernels:  [0, 0, 0, 0]
+      maxpool_strides:  [0, 0, 0, 0]
       activation: LeakyReLU
-      pretrain: False
     fpn:
       name: GhostPAN #PAN #FPN  #PAN a litle slower than FPN
       in_channels: [6, 6] #[8, 8] #[8, 6]

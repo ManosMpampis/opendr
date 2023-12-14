@@ -12,7 +12,6 @@ model:
       name: SimpleCnn_3
       activation: LeakyReLU
       use_depthwise: False
-      quant: False
     fpn:
       name: SimpleGPAN_1 #PAN #FPN  #PAN a litle slower than FPN
       in_channels: [ 32, 64 ]
@@ -24,7 +23,6 @@ model:
         scale_factor: 2
         mode: bilinear
       activation: LeakyReLU
-      quant: False
     head:
       name: SimplifierNanoDetPlusHead_1 #NanoDetPlusHead #NanoDetPlusHead NanoDetHead
       num_classes: 1
@@ -36,8 +34,6 @@ model:
       use_depthwise: True
       reg_max: 7
       activation: LeakyReLU
-      quant: False
-      fork: False
       norm_cfg:
         type: BN
       loss:

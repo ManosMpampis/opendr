@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import List
 
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import Conv, DWConv, ConvQuant, DWConvQuant
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import Conv, DWConv
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import fuse_modules
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
@@ -24,13 +24,12 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.modul
 
 class GhostConv(nn.Module):
     # Ghost Convolution https://github.com/huawei-noah/ghostnet
-    def __init__(self, c1, c2, k=1, s=1, g=1, act=True, quant=False):  # ch_in, ch_out, kernel, stride, groups
+    def __init__(self, c1, c2, k=1, s=1, g=1, act=True):  # ch_in, ch_out, kernel, stride, groups
         super().__init__()
-        conv = ConvQuant if quant else Conv
         c_ = c2 // 2  # hidden channels
         # c_ = c2
-        self.primary_conv = conv(c1, c_, k, s, None, g, act=act)
-        self.cheap_operation = conv(c_, c_, 3, 1, None, c_, act=act)
+        self.primary_conv = Conv(c1, c_, k, s, None, g, act=act)
+        self.cheap_operation = Conv(c_, c_, 3, 1, None, c_, act=act)
 
     def forward(self, x):
         x = self.primary_conv(x)
@@ -39,11 +38,11 @@ class GhostConv(nn.Module):
 
 class GhostBottleneck(nn.Module):
     # Ghost Bottleneck https://github.com/huawei-noah/ghostnet
-    def __init__(self, c1, c_, c2, act=True, quant=False):  # ch_in, ch_out
+    def __init__(self, c1, c_, c2, act=True):  # ch_in, ch_out
         super().__init__()
         self.conv = nn.Sequential(
-            GhostConv(c1, c_, 1, 1, act=act, quant=quant),  # pw
-            GhostConv(c_ , c2, 1, 1, act=False, quant=quant))  # pw-linear
+            GhostConv(c1, c_, 1, 1, act=act),  # pw
+            GhostConv(c_ , c2, 1, 1, act=False))  # pw-linear
         self.shortcut = nn.Sequential(
             nn.Conv2d(
                 c1,
@@ -81,7 +80,6 @@ class SimpleGB(nn.Module):
         out_channels,
         num_blocks=1,
         activation="LeakyReLU",
-        quant=False,
     ):
         super(SimpleGB, self).__init__()
 
@@ -93,8 +91,7 @@ class SimpleGB(nn.Module):
                     in_ch,
                     in_ch,
                     out_channels,
-                    act=act_layers(activation),
-                    quant=quant
+                    act=act_layers(activation)
                 )
             )
         self.blocks = nn.Sequential(*blocks)
@@ -132,18 +129,14 @@ class SimpleGPAN_2(nn.Module):
         kernel_size=5,
         num_blocks=1,
         upsample_cfg=dict(scale_factor=2, mode="bilinear"),
-        activation="LeakyReLU",
-        quant=False,
+        activation="LeakyReLU"
     ):
         super(SimpleGPAN_2, self).__init__()
         assert num_blocks >= 1
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        if use_depthwise:
-            conv = DWConvQuant if quant else DWConv
-        else:
-            conv = ConvQuant if quant else Conv
+        conv = DWConv if use_depthwise else Conv
 
         # build top-down blocks
         self.upsample = nn.Upsample(**upsample_cfg, align_corners=False)
@@ -157,7 +150,6 @@ class SimpleGPAN_2(nn.Module):
                     out_channels,
                     num_blocks,
                     activation=activation,
-                    quant=quant,
                 )
 
         self.top_down_blocks1 = SimpleGB(
@@ -165,7 +157,6 @@ class SimpleGPAN_2(nn.Module):
             out_channels,
             num_blocks,
             activation=activation,
-            quant=quant,
         )
 
         self.downsamples0 = conv(
@@ -186,8 +177,8 @@ class SimpleGPAN_2(nn.Module):
             act=act_layers(activation),
         )
 
-        self.bottom_up_blocks0 = SimpleGB(out_channels * 2, out_channels, num_blocks, activation=activation, quant=quant)
-        self.bottom_up_blocks1 = SimpleGB(out_channels * 2, out_channels, num_blocks, activation=activation, quant=quant)
+        self.bottom_up_blocks0 = SimpleGB(out_channels * 2, out_channels, num_blocks, activation=activation)
+        self.bottom_up_blocks1 = SimpleGB(out_channels * 2, out_channels, num_blocks, activation=activation)
 
     def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers
         for m in self.modules():
@@ -248,8 +239,7 @@ if __name__ == '__main__':
         kernel_size=3,
         num_blocks=2,
         upsample_cfg=dict(scale_factor=2, mode="bilinear"),
-        activation="LeakyReLU",
-        quant=True
+        activation="LeakyReLU"
     ).eval()
 
     print(model)
@@ -272,8 +262,8 @@ if __name__ == '__main__':
         kernel_size=3,
         num_blocks=2,
         upsample_cfg=dict(scale_factor=2, mode="bilinear"),
-        activation="LeakyReLU",
-        quant=False).eval()
+        activation="LeakyReLU"
+    ).eval()
     model = model.fuse()
     for name, param in model.named_parameters():
         if param.requires_grad:

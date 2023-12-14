@@ -13,7 +13,7 @@ from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.transf
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.loss import DistributionFocalLoss,\
     QualityFocalLoss, GIoULoss
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv \
-    import Conv, DWConv, ConvQuant, DWConvQuant, Concat, Flatten, fuse_modules
+    import Conv, DWConv, Concat, Flatten, fuse_modules
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.init_weights import normal_init
@@ -67,12 +67,9 @@ class SimplifierNanoDetPlusHead(nn.Module):
         reg_max=7,
         activation="LeakyReLU",
         assigner_cfg=dict(topk=13),
-        fork=False,
-        quant=False,
         **kwargs
     ):
         super(SimplifierNanoDetPlusHead, self).__init__()
-        self.fork = fork
         self.num_classes = num_classes
         self.in_channels = input_channel
         self.stems = len(strides)
@@ -84,11 +81,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
         self.activation = activation
         self.out_stages = []
 
-        if use_depthwise:
-            self.ConvModule = DWConvQuant if quant else DWConv
-        else:
-            self.ConvModule = ConvQuant if quant else Conv
-        # self.ConvModule = DWConv if use_depthwise else Conv
+        self.ConvModule = DWConv if use_depthwise else Conv
 
         self.loss_cfg = loss
         self.norm_cfg = norm_cfg

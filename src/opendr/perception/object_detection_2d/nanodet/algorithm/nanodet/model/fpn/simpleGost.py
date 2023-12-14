@@ -18,7 +18,7 @@ from typing import List
 import torch.nn.functional as F
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.conv import (
-    Conv, DWConv, ConvQuant, DWConvQuant, MultiOutput, Concat, fuse_modules)
+    Conv, DWConv, MultiOutput, Concat, fuse_modules)
 
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.model.module.activation import act_layers
 
@@ -87,17 +87,16 @@ class Sum(nn.Module):
 
 class GhostConv(nn.Module):
     # Ghost Convolution https://github.com/huawei-noah/ghostnet
-    def __init__(self, c1, c2, k=1, r=2, dw_k=5, s=1, act=True, quant=False):  # ch_in, ch_out, kernel, ratio, dw_kernel, stride
+    def __init__(self, c1, c2, k=1, r=2, dw_k=5, s=1, act=True):  # ch_in, ch_out, kernel, ratio, dw_kernel, stride
         super().__init__()
         self.c2 = c2
         c_ = math.ceil(c2 / r)
         nc = c_ * (r - 1)  # new channels in cheap operation
 
-        conv = ConvQuant if quant else Conv
         # c_ = (c2+1.9) // 2  # hidden channels
         # c_ = c2
-        self.primary_conv = conv(c1, c_, k, s, k // 2, act=act)
-        self.cheap_operation = conv(c_, nc, dw_k, 1, dw_k // 2, c_, act=act)
+        self.primary_conv = Conv(c1, c_, k, s, k // 2, act=act)
+        self.cheap_operation = Conv(c_, nc, dw_k, 1, dw_k // 2, c_, act=act)
 
     def forward(self, x):
         x = self.primary_conv(x)
@@ -109,19 +108,18 @@ class GhostBottleneck(nn.Module):
     def __init__(self, c1, c_, c2, k=3, s=1, se_ratio=0.0, act=True, quant=False):  # ch_in, ch_out
         super().__init__()
         has_se = se_ratio is not None and se_ratio > 0.0
-        conv = ConvQuant if quant else Conv
         self.gb = nn.Sequential(
-            GhostConv(c1, c_, 1, 2, act=act, quant=quant),  # pw
-            conv(c_, c_, k, s=s, p=(k - 1) // 2, g=c_, act=None) if s > 1 else nn.Identity(), # Depth-wise convolution
+            GhostConv(c1, c_, 1, 2, act=act),  # pw
+            Conv(c_, c_, k, s=s, p=(k - 1) // 2, g=c_, act=None) if s > 1 else nn.Identity(), # Depth-wise convolution
             SqueezeExcite(c_, se_ratio=se_ratio) if has_se else nn.Identity(),
-            GhostConv(c_, c2, 1, 2, act=False, quant=quant),  # pw-linear
+            GhostConv(c_, c2, 1, 2, act=False),  # pw-linear
         )
         if c1 == c2 and s == 1:
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Sequential(
-                conv(c1, c1, k=k, s=s, p=(k - 1) // 2, g=c1, act=None),
-                conv(c1, c2, k=1, s=1, p=0, act=None),
+                Conv(c1, c1, k=k, s=s, p=(k - 1) // 2, g=c1, act=None),
+                Conv(c1, c2, k=1, s=1, p=0, act=None),
             )
 
     def forward(self, x):
@@ -149,13 +147,11 @@ class SimpleGB(nn.Module):
         num_blocks=1,
         use_res=False,
         activation="LeakyReLU",
-        quant=False,
     ):
         super(SimpleGB, self).__init__()
-        conv = ConvQuant if quant else Conv
         self.use_res = use_res
         if use_res:
-            self.reduce_conv = conv(in_channels, out_channels, k=1, s=1, p=0, act=act_layers(activation))
+            self.reduce_conv = Conv(in_channels, out_channels, k=1, s=1, p=0, act=act_layers(activation))
 
         blocks = []
         for idx in range(num_blocks):
@@ -166,8 +162,7 @@ class SimpleGB(nn.Module):
                     int(in_ch * expand),
                     out_channels,
                     k=kernel_size,
-                    act=act_layers(activation),
-                    quant=quant
+                    act=act_layers(activation)
                 )
             )
         self.blocks = nn.Sequential(*blocks)
@@ -211,7 +206,6 @@ class SimpleGPAN(nn.Module):
         num_extra_level=0,
         upsample_cfg=dict(scale_factor=2, mode="nearest"), #"bilinear"),
         activation="LeakyReLU",
-        quant=False,
     ):
         super(SimpleGPAN, self).__init__()
         assert num_blocks >= 1
@@ -222,10 +216,7 @@ class SimpleGPAN(nn.Module):
         modes = ["linear", "bilinear", "bicubic", "trilinear"]
         si = len(self.in_channels)  # starting idx
 
-        if use_depthwise:
-            conv = DWConvQuant if quant else DWConv
-        else:
-            conv = ConvQuant if quant else Conv
+        conv = DWConv if use_depthwise else Conv
 
         # build top-down blocks
         reduce_layer = conv(in_channels[si-1], out_channels, 1, act=act_layers(activation))
@@ -252,7 +243,7 @@ class SimpleGPAN(nn.Module):
             top_down_blocks.add_module(f"Concat_{name_idx}", concat)
 
             gb = SimpleGB(out_channels * 2, out_channels, expand=expand, kernel_size=kernel_size, num_blocks=num_blocks,
-                          use_res=use_res, activation=activation, quant=quant)
+                          use_res=use_res, activation=activation)
             gb.i = si + 4  # SimpleGB
             gb.f = -1
             top_down_blocks.add_module(f"GB_{name_idx}", gb)
@@ -277,7 +268,7 @@ class SimpleGPAN(nn.Module):
             bottom_up_blocks.add_module(f"Concat_{idx}", concat)
 
             gb = SimpleGB(out_channels * 2, out_channels, kernel_size=kernel_size, expand=expand, num_blocks=num_blocks,
-                          use_res=use_res, activation=activation, quant=quant)
+                          use_res=use_res, activation=activation)
             gb.i = si + 3
             gb.f = -1
             bottom_up_blocks.add_module(f"GB_{idx}", gb)
