@@ -89,17 +89,10 @@ class SimplifierNanoDetPlusHead(nn.Module):
         self.assigner = DynamicSoftLabelAssigner(**assigner_cfg)
         self.distribution_project = Integral(self.reg_max)
 
-        try:
-            self.loss_qfl = QualityFocalLoss(
-                beta=self.loss_cfg.loss_qfl.beta,
-                loss_weight=self.loss_cfg.loss_qfl.loss_weight,
-                cost_function=self.loss_cfg.loss_qfl.cost_function,
-            )
-        except AttributeError:
-            self.loss_qfl = QualityFocalLoss(
-                beta=self.loss_cfg.loss_qfl.beta,
-                loss_weight=self.loss_cfg.loss_qfl.loss_weight
-            )
+        self.loss_qfl = QualityFocalLoss(
+            beta=self.loss_cfg.loss_qfl.beta,
+            loss_weight=self.loss_cfg.loss_qfl.loss_weight
+        )
 
         self.loss_dfl = DistributionFocalLoss(
             loss_weight=self.loss_cfg.loss_dfl.loss_weight
@@ -408,7 +401,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
         cls_scores, bbox_preds = preds.split(
             [self.num_classes, 4 * (self.reg_max + 1)], dim=-1
         )
-        results = self.get_bboxes(cls_scores, bbox_preds, meta["img"][0], conf_threshold=conf_thresh,
+        results = self.get_bboxes(cls_scores, bbox_preds, meta["img"], conf_threshold=conf_thresh,
                                   iou_threshold=iou_thresh, nms_max_num=nms_max_num)
         (det_bboxes, det_labels) = results
 
@@ -420,7 +413,7 @@ class SimplifierNanoDetPlusHead(nn.Module):
             class_det_bboxes = det_bboxes[inds]
             class_det_bboxes[:, :4] = scriptable_warp_boxes(
                 class_det_bboxes[:, :4],
-                torch.linalg.inv(meta["warp_matrix"][0]), meta["width"][0], meta["height"][0]
+                torch.linalg.inv(meta["warp_matrix"]), meta["width"], meta["height"]
             )
             if class_det_bboxes.shape[0] != 0:
                 det = torch.cat((

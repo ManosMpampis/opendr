@@ -543,32 +543,27 @@ class SimplifierNanoDetPlusHead_1(nn.Module):
 
         max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
 
-        bs = preds.shape[0]
-        xc = (preds[..., :self.num_classes] > conf_thresh).any(dim=-1)
-        det_results = [torch.zeros((0, 6), device=preds.device, dtype=preds.dtype)] * bs
-        for i, (pred) in enumerate(preds):
-            valid_mask = xc[i]
-            pred = pred[valid_mask]
-            if not pred.shape[0]:
-                continue
+        valid_mask = (preds[..., :self.num_classes] > conf_thresh).any(dim=-1)
 
-            max_scores, labels = torch.max(pred[:, :self.num_classes], dim=1)
-            keep = max_scores.argsort(descending=True)[:max_nms]
-            pred = pred[keep]  # sort by confidence and remove excess boxes
-            labels = labels[keep]
-            bboxes = pred[:, self.num_classes:]
-            cls_scores = max_scores[keep]
-            # cls_scores, bboxes = pred.split((self.num_classes, 4), dim=-1)
+        preds = preds[valid_mask]
+        if not preds.shape[0]:
+            return torch.zeros((0, 6), device=preds.device, dtype=preds.dtype)
 
-            det_bboxes, keep = batched_nms(bboxes, cls_scores, labels, nms_cfg=dict(iou_threshold=iou_thresh, nms_max_num=float(nms_max_num)))
-            det_labels = labels[keep]
-            det_bboxes[:, :4] = scriptable_warp_boxes(
-                det_bboxes[:, :4],
-                torch.linalg.inv(meta["warp_matrix"][i]), meta["width"][i], meta["height"][i]
-            )
-            det = torch.cat((det_bboxes, det_labels[:, None]), dim=1)
-            det_results[i] = det
-        return det_results
+        max_scores, labels = torch.max(preds[:, :self.num_classes], dim=1)
+        keep = max_scores.argsort(descending=True)[:max_nms]
+        pred = preds[keep]  # sort by confidence and remove excess boxes
+        labels = labels[keep]
+        bboxes = pred[:, self.num_classes:]
+        cls_scores = max_scores[keep]
+
+        det_bboxes, keep = batched_nms(bboxes, cls_scores, labels,
+                                       nms_cfg=dict(iou_threshold=iou_thresh, nms_max_num=float(nms_max_num)))
+        det_labels = labels[keep]
+        det_bboxes[:, :4] = scriptable_warp_boxes(
+            det_bboxes[:, :4],
+            torch.linalg.inv(meta["warp_matrix"]), meta["width"], meta["height"]
+        )
+        return torch.cat((det_bboxes, det_labels[:, None]), dim=1)
 
     def _eval_post_process_old(self, preds, meta):
         # TODO: get_bboxes must run in loop and can be used only tensors for better performance

@@ -25,7 +25,6 @@ if __name__ == '__main__':
     parser.add_argument("--optimize-trt", help="", action="store_false")
     parser.add_argument("--download", help="", action="store_true")
     parser.add_argument("--hf", help="", action="store_false")
-    parser.add_argument("--int", help="", action="store_true")
     parser.add_argument("--fuse", help="", action="store_false")
     parser.add_argument("--ch_l", help="", action="store_true")
     parser.add_argument("--dynamic", help="", action="store_true")
@@ -54,9 +53,14 @@ if __name__ == '__main__':
     nanodet = NanodetLearner(model_to_use=args.model, device=args.device, model_log_name=f"{args.model}")
     save_path = f"./temp/wanted/{nanodet.cfg.check_point_name}/model_best/"
     nanodet.cfg.defrost()
+    temp_name = nanodet.cfg.check_point_name
     nanodet.cfg.check_point_name = "model_state_best"
+    nanodet.cfg.data.val.input_size = [1920, 1088]  # [w,h]
     nanodet.cfg.freeze()
-    nanodet.load(save_path, verbose=True)
+    # nanodet.load(save_path, verbose=True)
+    nanodet.cfg.defrost()
+    nanodet.cfg.check_point_name = temp_name
+    nanodet.cfg.freeze()
 
     if args.download:
         nanodet.download("./predefined_examples", mode="pretrained", verbose=False)
@@ -65,13 +69,13 @@ if __name__ == '__main__':
 
     if args.optimize_jit:
         nanodet.optimize(f"./jit/nanodet_{nanodet.cfg.check_point_name}", optimization="jit", hf=args.hf,
-                         verbose=False, new_load=True)
+                         verbose=False, lazy_load=True)
     if args.optimize_onnx:
         nanodet.optimize(f"./onnx/nanodet_{nanodet.cfg.check_point_name}", optimization="onnx", hf=args.hf,
-                         verbose=False, new_load=True, dynamic=False)
+                         verbose=False, lazy_load=True, dynamic=False)
     if args.optimize_trt:
         nanodet.optimize(f"./trt/nanodet_{nanodet.cfg.check_point_name}", optimization="trt", hf=args.hf,
-                         verbose=True, new_load=True, dynamic=False, calib_dataset=dataset, int=args.int)
+                         verbose=True, lazy_load=True, dynamic=False)
 
     nanodet.benchmark(repetitions=args.repetitions, warmup=args.warmup, conf_threshold=args.conf_threshold,
                       iou_threshold=args.iou_threshold, nms_max_num=args.nms, hf=args.hf, fuse=args.fuse,
