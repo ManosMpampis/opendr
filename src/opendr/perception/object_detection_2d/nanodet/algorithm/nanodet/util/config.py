@@ -29,7 +29,7 @@ cfg.log = CfgNode()
 cfg.log.interval = 50
 
 # testing
-cfg.test = CfgNode()
+# cfg.test = CfgNode()
 # size of images for each device
 
 

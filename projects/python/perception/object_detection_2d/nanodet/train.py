@@ -21,9 +21,9 @@ import os
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="simple_big_ch")
+    parser.add_argument("--model", help="Model for which a config file will be used", type=str, default="plus_fast")
     parser.add_argument("--device", help="Device to use (cpu, cuda)", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=128)
+    parser.add_argument("--batch-size", help="Batch size to use for training", type=int, default=2)
     parser.add_argument("--lr", help="Learning rate to use for training", type=float, default=0.005)
     parser.add_argument("--warmup-steps", help="iterations of warmup", type=int, default=2)
     parser.add_argument("--checkpoint-freq", help="Frequency in-between checkpoint saving and evaluations",
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     dataset_type = dataset_metadata["dataset_type"]
 
     dataset = XMLBasedDataset(root=f'{data_root}/train', dataset_type=dataset_type, images_dir='images',
-                              annotations_dir='annotations', classes=classes)
+                              annotations_dir='annotations', classes=classes, number_of_images=2)
 
     val_dataset = XMLBasedDataset(root=f'{data_root}/val', dataset_type=dataset_type, images_dir='images',
                                   annotations_dir='annotations', classes=classes)

@@ -44,24 +44,56 @@ class DynamicSoftLabelAssigner(BaseAssigner):
         Returns:
             :obj:`AssignResult`: The assigned result.
         """
+        # INF = 100000000
+        # # num_gt = (gt_labels > -1).sum(dim=1)
+        # # num_bboxes = decoded_bboxes.size()
+        # num_gt = gt_bboxes.size(0)
+        # num_bboxes = decoded_bboxes.size(0)
+        #
+        # # assign 0 by default
+        # # assigned_gt_inds = decoded_bboxes.new_full(num_bboxes, 0, dtype=torch.long)
+        # assigned_gt_inds = decoded_bboxes.new_full((num_bboxes,), 0, dtype=torch.long)
+        #
+        # # prior_center = priors[:, :, :2].permute(1, 0, 2)[:, None, :]
+        # # gt_bboxes_temp = gt_bboxes[:, :, :2].permute(1, 0, 2)
+        # # lt_ = prior_center - gt_bboxes_temp
+        # # rb_ = gt_bboxes_temp - prior_center
+        # #
+        # # deltas = torch.cat([lt_, rb_], dim=-1).permute(2, 0, 1, 3).contiguous()
+        # # is_in_gts = deltas.min(dim=-1).values > 0
+        # # valid_mask = is_in_gts.sum(dim=2) > 0
+        #
+        # prior_center = priors[:, :2]
+        # lt_ = prior_center[:, None] - gt_bboxes[:, :2]
+        # rb_ = gt_bboxes[:, 2:] - prior_center[:, None]
+        #
+        # deltas = torch.cat([lt_, rb_], dim=-1)
+        # is_in_gts = deltas.min(dim=-1).values > 0
+        # valid_mask = is_in_gts.sum(dim=1) > 0
+        #
+        # valid_decoded_bbox = decoded_bboxes[valid_mask]
+        # valid_pred_scores = pred_scores[valid_mask]
+        # num_valid = valid_decoded_bbox.size(0)
+
         INF = 100000000
-        num_gt = gt_bboxes.size(0)
-        num_bboxes = decoded_bboxes.size(0)
+        num_gt = gt_bboxes.size(1)
+        num_bboxes = decoded_bboxes.size(1)
 
         # assign 0 by default
-        assigned_gt_inds = decoded_bboxes.new_full((num_bboxes,), 0, dtype=torch.long)
+        assigned_gt_inds = decoded_bboxes.new_full((decoded_bboxes.size(0),), 0, dtype=torch.long)
 
-        prior_center = priors[:, :2]
-        lt_ = prior_center[:, None] - gt_bboxes[:, :2]
-        rb_ = gt_bboxes[:, 2:] - prior_center[:, None]
+        prior_center = priors[:, :, :2]
+        lt_ = prior_center.permute(1,0,2)[:, None, :] - gt_bboxes[:, :, :2].permute(1,0,2)
+        rb_ = gt_bboxes[:, :, 2:].permute(1,0,2) - prior_center.permute(1,0,2)[:, None, :]
 
-        deltas = torch.cat([lt_, rb_], dim=-1)
+        deltas = torch.cat([lt_, rb_], dim=-1).permute(2, 0, 1, 3)
         is_in_gts = deltas.min(dim=-1).values > 0
-        valid_mask = is_in_gts.sum(dim=1) > 0
+        valid_masks = is_in_gts.sum(dim=2) > 0
 
-        valid_decoded_bbox = decoded_bboxes[valid_mask]
-        valid_pred_scores = pred_scores[valid_mask]
-        num_valid = valid_decoded_bbox.size(0)
+        for valid_mask in valid_masks:
+            valid_decoded_bbox = decoded_bboxes[:, valid_mask, :]
+            valid_pred_scores = pred_scores[:, valid_mask, :]
+        num_valid = valid_decoded_bbox.size(1)
 
         if num_gt == 0 or num_bboxes == 0 or num_valid == 0:
             # No ground truth or boxes, return empty assignment

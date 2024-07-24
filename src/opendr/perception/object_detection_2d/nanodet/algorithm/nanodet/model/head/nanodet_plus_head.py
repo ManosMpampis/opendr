@@ -241,8 +241,15 @@ class NanoDetPlusHead(nn.Module):
                 self.distribution_project(aux_reg_preds) * center_priors[..., 2, None]
             )
             aux_decoded_bboxes = distance2bbox(center_priors[..., :2], aux_dis_preds)
-            batch_assign_res = multi_apply(
-                self.target_assign_single_img,
+            # batch_assign_res = multi_apply(
+            #     self.target_assign_single_img,
+            #     aux_cls_preds.detach(),
+            #     center_priors,
+            #     aux_decoded_bboxes.detach(),
+            #     gt_bboxes,
+            #     gt_labels,
+            # )
+            batch_assign_res = self.target_assign_single_img(
                 aux_cls_preds.detach(),
                 center_priors,
                 aux_decoded_bboxes.detach(),
@@ -251,8 +258,15 @@ class NanoDetPlusHead(nn.Module):
             )
         else:
             # use self prediction to assign
-            batch_assign_res = multi_apply(
-                self.target_assign_single_img,
+            # batch_assign_res = multi_apply(
+            #     self.target_assign_single_img,
+            #     cls_preds.detach(),
+            #     center_priors,
+            #     decoded_bboxes.detach(),
+            #     gt_bboxes,
+            #     gt_labels,
+            # )
+            batch_assign_res = self.target_assign_single_img(
                 cls_preds.detach(),
                 center_priors,
                 decoded_bboxes.detach(),
@@ -340,11 +354,12 @@ class NanoDetPlusHead(nn.Module):
                 with shape [num_gts].
         """
 
-        num_priors = center_priors.size(0)
-        device = center_priors.device
-        gt_bboxes = torch.from_numpy(gt_bboxes).to(device)
-        gt_labels = torch.from_numpy(gt_labels).to(device)
-        num_gts = gt_labels.size(0)
+        bs = center_priors.size(0)
+        num_priors = center_priors.size(1)
+        # device = center_priors.device
+        # gt_bboxes = torch.from_numpy(gt_bboxes).to(device)
+        # gt_labels = torch.from_numpy(gt_labels).to(device)
+        num_gts = (gt_labels>-1).sum(dim=1)
         gt_bboxes = gt_bboxes.to(decoded_bboxes.dtype)
 
         bbox_targets = torch.zeros_like(center_priors)
@@ -354,7 +369,7 @@ class NanoDetPlusHead(nn.Module):
         )
         label_scores = center_priors.new_zeros(labels.shape, dtype=torch.float)
         # No target
-        if num_gts == 0:
+        if torch.all(num_gts == 0):
             return labels, label_scores, bbox_targets, dist_targets, 0
 
         assign_result = self.assigner.assign(

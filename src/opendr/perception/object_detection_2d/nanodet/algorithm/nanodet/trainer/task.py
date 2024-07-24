@@ -24,7 +24,7 @@ import torch
 import torch.distributed as dist
 from pytorch_lightning import LightningModule
 
-from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.batch_process import stack_batch_img
+from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.data.batch_process import stack_batch_img, stack_batch_tensor
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util\
     import convert_avg_params, gather_results, mkdir, rank_filter
 from opendr.perception.object_detection_2d.nanodet.algorithm.nanodet.util.check_point import save_model_state
@@ -68,9 +68,27 @@ class TrainingTask(LightningModule):
     def _preprocess_batch_input(self, batch):
         batch_imgs = batch["img"]
         if isinstance(batch_imgs, list):
-            batch_imgs = [img.to(self.device) for img in batch_imgs]
+            batch_imgs = [img.to(self.device, non_blocking=True) for img in batch_imgs]
             batch_img_tensor = stack_batch_img(batch_imgs, divisible=32)
             batch["img"] = batch_img_tensor
+
+        batch_bboxes = batch["gt_bboxes"]
+        if isinstance(batch_imgs, list):
+            batch_bboxes = [torch.from_numpy(bbox).to(self.device, non_blocking=True) for bbox in batch_bboxes]
+            batch_bboxes = stack_batch_img(batch_bboxes, divisible=0, pad_value=-1)
+            batch["gt_bboxes"] = batch_bboxes
+
+        batch_labels = batch["gt_labels"]
+        if isinstance(batch_imgs, list):
+            batch_labels = [torch.from_numpy(label).to(self.device, non_blocking=True) for label in batch_labels]
+            batch_labels = stack_batch_tensor(batch_labels, divisible=0, pad_value=-1)
+            batch["gt_labels"] = batch_labels
+
+        batch_matrix = batch["warp_matrix"]
+        if isinstance(batch_imgs, list):
+            batch_matrix = [matrix.to(self.device, non_blocking=True) for matrix in batch_matrix]
+            batch_matrix = torch.stack(batch_matrix, dim=0).contiguous()
+            batch["warp_matrix"] = batch_matrix
         return batch
 
     def forward(self, x):
