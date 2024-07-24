@@ -59,6 +59,8 @@ class SimpleConvHead(nn.Module):
         self.reg_convs = nn.ModuleList()
         for i in range(self.stacked_convs):
             chn = self.in_channels if i == 0 else self.feat_channels
+            norm_cfg = self.norm_cfg.copy()
+            norm_cfg["num_groups"] = chn if chn < self.norm_cfg["num_groups"] else norm_cfg["num_groups"]
             self.cls_convs.append(
                 ConvModule(
                     chn,
@@ -66,7 +68,7 @@ class SimpleConvHead(nn.Module):
                     3,
                     stride=1,
                     padding=1,
-                    norm_cfg=self.norm_cfg,
+                    norm_cfg=norm_cfg,
                     activation=self.activation,
                 )
             )
@@ -77,7 +79,7 @@ class SimpleConvHead(nn.Module):
                     3,
                     stride=1,
                     padding=1,
-                    norm_cfg=self.norm_cfg,
+                    norm_cfg=norm_cfg,
                     activation=self.activation,
                 )
             )

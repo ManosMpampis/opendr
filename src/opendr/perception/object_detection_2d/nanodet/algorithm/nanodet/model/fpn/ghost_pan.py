@@ -105,6 +105,7 @@ class GhostPAN(nn.Module):
         self,
         in_channels,
         out_channels,
+        out_stages=None,
         use_depthwise=False,
         reduction_depthwise=False,
         kernel_size=5,
@@ -118,6 +119,9 @@ class GhostPAN(nn.Module):
         activation="LeakyReLU",
     ):
         super(GhostPAN, self).__init__()
+        # Initialize all yml files with out_stages instead of out_channels.
+        if out_stages is not None:
+            out_channels = out_stages
         assert num_extra_level >= 0
         assert num_blocks >= 1
         kernel_size_shortcut = kernel_size if kernel_size_shortcut is None else kernel_size_shortcut

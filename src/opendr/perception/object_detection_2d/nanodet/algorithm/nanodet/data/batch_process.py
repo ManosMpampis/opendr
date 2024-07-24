@@ -37,6 +37,34 @@ def stack_batch_img(
     return torch.stack(batch_imgs, dim=0).contiguous()
 
 
+def stack_batch_tensor(
+    tensors: Sequence[torch.Tensor], divisible: int = 0, pad_value: float = 0.0
+) -> torch.Tensor:
+    """
+    Args:
+        img_tensors (Sequence[torch.Tensor]):
+        divisible (int):
+        pad_value (float): value to pad
+
+    Returns:
+        torch.Tensor.
+    """
+    assert len(tensors) > 0
+    assert isinstance(tensors, (tuple, list))
+    assert divisible >= 0
+    tensor_len = []
+    for tensor in tensors:
+        tensor_len.append(tensor.shape[-1])
+    max_len = max(tensor_len)
+    if divisible > 0:
+        max_len = torch.div((max_len + divisible - 1), divisible, rounding_mode='trunc') * divisible
+
+    batch_tensors = []
+    for tensor in tensors:
+        padding_size = [0, max_len - tensor.shape[-1]]
+        batch_tensors.append(F.pad(tensor, padding_size, value=pad_value))
+    return torch.stack(batch_tensors, dim=0).contiguous()
+
 def divisible_padding(
     img_tensor: torch.Tensor, divisible: torch.Tensor = torch.tensor(0), pad_value: float = 0.0
 ) -> torch.Tensor:
